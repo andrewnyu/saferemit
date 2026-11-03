@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui %}
+{% set role = 'family' %}{% set active = 'family' %}
+{% block title %}Bill #{{ bill.id }}{% endblock %}
+{% block content %}
+<div class="stack">
+  <a href="/family" class="muted">← Bills</a>
+  <section class="card">
+    <div class="spread">
+      <div><h1>{{ bill.extraction.biller_name if bill.extraction else bill.filename }}</h1>
+        <small class="muted">Sent by {{ bill.submitted_by }} · {{ bill.created_at|when }}</small></div>
+      <div style="text-align:right"><div class="big">{{ ui.bill_amount(bill) }}</div>{{ ui.status(bill.status) }}</div>
+    </div>
+    {% if bill.status == 'paid' %}
+      <div class="callout ok" style="margin-top:12px">Paid. {{ bill.extraction.biller_name }} received the payment through PayPal.</div>
+    {% elif bill.status == 'awaiting_ofw' %}
+      <div class="callout warn" style="margin-top:12px">This one is above the amount the plan pays on its own. We've asked your OFW to approve it on their phone.</div>
+    {% elif bill.status in ('rejected', 'declined') %}
+      <div class="callout bad" style="margin-top:12px">Not paid: {{ bill.status_detail }}. Your OFW has been told.</div>
+    {% elif bill.status_detail %}
+      <div class="callout warn" style="margin-top:12px">{{ bill.status_detail }}</div>
+    {% endif %}
+  </section>
+  <div class="grid two">
+    <section class="card"><img class="bill-photo" src="/bills/{{ bill.id }}/image" alt="bill photo"></section>
+    <section class="stack">
+      <div class="card"><div class="spread"><h2>What Padala read</h2>{{ ui.source(bill) }}</div>{{ ui.checks(bill.checks) }}</div>
+      <div class="card"><h2>What's left this month</h2>{{ ui.budget(summary) }}</div>
+    </section>
+  </div>
+</div>
+{% endblock %}

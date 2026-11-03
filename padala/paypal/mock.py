@@ -28,7 +28,8 @@ class MockPayPal:
         token = _id("SETUP", request_id)
         self.calls.append(("setup_token", {"return_url": return_url}))
         return {"id": token, "status": "PAYER_ACTION_REQUIRED",
-                "approve_url": f"{self.base_url}/ofw/vault/mock-approve?token={token}"}
+                # Relative on purpose: the simulated approval page is served by this app.
+                "approve_url": f"/ofw/vault/mock-approve?token={token}"}
 
     def create_payment_token(self, *, setup_token_id: str, request_id: str) -> dict:
         self.calls.append(("payment_token", {"setup_token_id": setup_token_id}))

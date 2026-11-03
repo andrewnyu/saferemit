@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui %}
+{% set role = 'ofw' %}{% set active = 'dash' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="stack">
+  {% if not device or not vault or not plan %}
+  <div class="callout warn">Finish setup:
+    {% if not device %}<a href="/ofw/onboarding">create a device key</a>{% endif %}
+    {% if not vault %}· <a href="/ofw/onboarding">link PayPal</a>{% endif %}
+    {% if not plan %}· <a href="/ofw/plan">sign a plan</a>{% endif %}
+  </div>
+  {% endif %}
+  {% if pending %}<div class="callout info"><b>{{ pending }}</b> item{{ 's' if pending != 1 }} need{{ 's' if pending == 1 }} your decision. <a href="/ofw/approvals">Review →</a></div>{% endif %}
+
+  <div class="grid side">
+    <section class="card">
+      <div class="spread"><h2>Every peso</h2><small class="muted">{{ bills|length }} bills</small></div>
+      {% if bills %}
+      <ul class="bill-list">
+        {% for b in bills %}
+        <li>
+          <a href="/ofw/bills/{{ b.id }}"><img class="thumb" src="/bills/{{ b.id }}/image" alt="bill {{ b.id }}"></a>
+          <div class="grow">
+            <a href="/ofw/bills/{{ b.id }}"><b>{{ b.extraction.biller_name if b.extraction else b.filename }}</b></a><br>
+            <small class="muted">#{{ b.id }} · from {{ b.submitted_by }} · {{ b.created_at|when }}</small><br>
+            {% if b.id in payments %}{% set p = payments[b.id] %}<small>USD {{ '%.2f'|format(p.usd_cents/100) }} charged @ {{ p.fx_rate }} · capture <code>{{ p.capture_id }}</code></small>
+            {% elif b.status_detail %}<small class="muted">{{ b.status_detail }}</small>{% endif %}
+          </div>
+          <div style="text-align:right"><div class="amount">{{ ui.bill_amount(b) }}</div>{{ ui.status(b.status) }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted">No bills yet. The family uploads them from the <a href="/family">family view</a>.</p>{% endif %}
+    </section>
+    <aside class="stack">
+      <section class="card">
+        <h2>Budget</h2>
+        {{ ui.budget(summary) }}
+      </section>
+      <section class="card flat">
+        <h2>Setup</h2>
+        <dl class="kv">
+          <dt>Device key</dt><dd>{% if device %}<code>{{ device.kid[:16] }}…</code>{% else %}—{% endif %}</dd>
+          <dt>PayPal</dt><dd>{% if vault %}<code>{{ vault.vault_id }}</code> ({{ vault.mode }}){% else %}not linked{% endif %}</dd>
+          <dt>Mandate</dt><dd>{% if plan %}<code>{{ plan.mandate_id[:16] }}…</code>{% else %}—{% endif %}</dd>
+        </dl>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

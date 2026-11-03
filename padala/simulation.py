@@ -40,7 +40,7 @@ class SoftwareDevice:
         return jws.sign({"typ": STEP_UP_TYP, "kid": self.kid}, payload, self.key)
 
 
-def test_settings(data_dir: Path) -> Settings:
+def make_settings(data_dir: Path) -> Settings:
     return Settings(data_dir=Path(data_dir), base_url="http://testserver", paypal_mode="mock",
                     paypal_client_id="", paypal_client_secret="", intake_mode="offline",
                     anthropic_api_key="", fx_offline=True, fx_fallback_rate=58.50)
@@ -48,7 +48,7 @@ def test_settings(data_dir: Path) -> Settings:
 
 def build_world(data_dir: Path, clock: Callable[[], float] = time.time,
                 paypal: MockPayPal | None = None) -> tuple[Services, SoftwareDevice]:
-    services = Services(test_settings(data_dir), paypal_client=paypal or MockPayPal("http://testserver"), clock=clock)
+    services = Services(make_settings(data_dir), paypal_client=paypal or MockPayPal("http://testserver"), clock=clock)
     seed_registry(services)
     device = SoftwareDevice()
     services.register_device_key(device.jwk, "software device (tests only)")

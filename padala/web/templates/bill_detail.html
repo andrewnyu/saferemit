@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui %}
+{% set role = 'ofw' %}{% set active = 'dash' %}
+{% block title %}Bill #{{ bill.id }}{% endblock %}
+{% block content %}
+<div class="stack">
+  <div class="spread">
+    <div>
+      <a href="/ofw" class="muted">← Dashboard</a>
+      <h1>{{ bill.extraction.biller_name if bill.extraction else bill.filename }} <small class="muted">#{{ bill.id }}</small></h1>
+      <small class="muted">Uploaded by {{ bill.submitted_by }} · {{ bill.created_at|when }}</small>
+    </div>
+    <div style="text-align:right"><div class="big">{{ ui.bill_amount(bill) }}</div>{{ ui.status(bill.status) }}</div>
+  </div>
+  {% if bill.status_detail %}<div class="callout {{ 'bad' if bill.status in ('rejected', 'declined', 'failed') else 'warn' }}">{{ bill.status_detail }}</div>{% endif %}
+
+  <div class="grid two">
+    <section class="card">
+      <h2>Bill evidence</h2>
+      <img class="bill-photo" src="/bills/{{ bill.id }}/image" alt="bill photo">
+      <p><small class="muted">sha-256 <code>{{ bill.image_sha256[:24] }}…</code></small></p>
+    </section>
+    <section class="stack">
+      <div class="card">
+        <div class="spread"><h2>What the AI read</h2>{{ ui.source(bill) }}</div>
+        {% if bill.extraction %}{% set x = bill.extraction %}
+        <dl class="kv">
+          <dt>Biller</dt><dd>{{ x.biller_name }}</dd>
+          <dt>Account</dt><dd>{{ x.account_number or '—' }} {% if x.account_name %}<small class="muted">({{ x.account_name }})</small>{% endif %}</dd>
+          <dt>Period</dt><dd>{{ x.statement_period or '—' }}</dd>
+          <dt>Due</dt><dd>{{ x.due_date or '—' }}</dd>
+          <dt>Category</dt><dd><span class="tag">{{ x.category }}</span> · {{ x.document_language }}</dd>
+        </dl>
+        <table style="margin-top:10px"><tbody>
+          {% for li in x.line_items %}<tr><td>{{ li.description }}</td><td style="text-align:right">₱{{ '{:,.2f}'.format(li.amount) }}</td></tr>{% endfor %}
+          <tr><td><b>Amount due</b></td><td style="text-align:right"><b>₱{{ '{:,.2f}'.format(x.amount_due) }}</b></td></tr>
+        </tbody></table>
+        {% else %}<p class="muted">No extraction.</p>{% endif %}
+      </div>
+      <div class="card">
+        <h2>Agent checks</h2>
+        <p class="muted"><small>Deterministic; shown to explain the draft. The gateway re-runs what matters itself.</small></p>
+        {{ ui.checks(bill.checks) }}
+      </div>
+    </section>
+  </div>
+
+  {% if payment %}
+  <section class="card">
+    <h2>PayPal settlement <span class="badge {{ 'warn' if payment.paypal_mode == 'mock' else 'ok' }}">{{ payment.paypal_mode }}</span></h2>
+    <dl class="kv">
+      <dt>Paid to payee</dt><dd>{{ payment.php_minor|peso }} via Payouts · batch <code>{{ payment.payout_batch_id }}</code> ({{ payment.payout_status }})</dd>
+      <dt>Charged to OFW</dt><dd>USD {{ '%.2f'|format(payment.usd_cents/100) }} from the vaulted wallet · capture <code>{{ payment.capture_id }}</code></dd>
+      <dt>FX</dt><dd>{{ payment.fx_rate }} PHP per USD · {{ payment.fx_source }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+
+  {% for r in receipts %}
+  <section class="card">
+    <div class="spread">
+      <h2>Gateway verification {% if receipts|length > 1 %}<small class="muted">({{ loop.index }} of {{ receipts|length }})</small>{% endif %}</h2>
+      <span class="badge {{ 'ok' if r.payload.status == 'Success' else ('warn' if r.payload.error == 'step_up_required' else 'bad') }}">
+        {{ 'Success' if r.payload.status == 'Success' else r.payload.error }}</span>
+    </div>
+    {{ ui.trace(r.trace) }}
+    <details><summary>Signed receipt</summary>
+      <pre>{{ {'header': r.header, 'payload': r.payload}|tojson_pretty }}</pre>
+      <p><small>Compact JWS (verify with the key at <a href="/.well-known/padala-gateway.json">/.well-known/padala-gateway.json</a>):</small></p>
+      <pre>{{ r.receipt_jwt }}</pre>
+    </details>
+  </section>
+  {% endfor %}
+
+  {% if bill.closed_content %}
+  <section class="card flat">
+    <details><summary>Closed Payment Mandate content (signed by the bill agent)</summary>
+      <pre>{{ bill.closed_content|tojson_pretty }}</pre></details>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

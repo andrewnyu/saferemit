@@ -120,8 +120,10 @@ class Services:
             not_after=(today + timedelta(days=30)).isoformat(), valid_days=30,
             ofw_name="Ate Liza (Dubai)", household="Santos family, Bacolod")
 
-    def create_draft(self, plan: m.Plan) -> tuple[int, open_mandate.Draft]:
-        key = self.device_key()
+    def create_draft(self, plan: m.Plan, kid: str | None = None) -> tuple[int, open_mandate.Draft]:
+        """Prepare the open mandate for the browser holding device key `kid` to sign."""
+        key = (self.db.one("SELECT * FROM device_keys WHERE kid = ? AND revoked = 0", kid) if kid
+               else self.device_key())
         if key is None:
             raise ValueError("register a device key first")
         draft = open_mandate.prepare(plan, self.agent_jwk, key["kid"], int(self.clock()))
@@ -176,6 +178,14 @@ class Services:
                 "left": max(plan.monthly_budget_minor - spent, 0),
                 "pct": min(100, round(100 * spent / plan.monthly_budget_minor)), "categories": categories,
                 "exp": plan_row["exp"], "step_up_over": plan.step_up_over_minor}
+
+    def reset_demo(self) -> None:
+        """Wipe demo state (bills, plans, ledger, keys registered by browsers) and reseed."""
+        with self.db.transaction() as conn:
+            for table in ("approvals", "payments", "bills", "plans", "vault", "device_keys", "gw_nonces",
+                          "gw_ledger", "gw_receipts", "gw_evidence", "bill_history", "payees", "kv"):
+                conn.execute(f"DELETE FROM {table}")
+        seed_registry(self)
 
     def receipt(self, receipt_id: str) -> dict | None:
         row = self.db.one("SELECT * FROM gw_receipts WHERE id = ?", receipt_id)

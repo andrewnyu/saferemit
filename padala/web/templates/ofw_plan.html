@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% set role = 'ofw' %}{% set active = 'plan' %}
+{% block title %}Plan{% endblock %}
+{% block content %}
+<div class="stack">
+  <div class="spread">
+    <div><h1>Remittance plan</h1><p class="muted">These rules become an AP2 open Payment Mandate that only your device can sign.</p></div>
+    {% if active_plan %}<span class="badge ok">Active plan signed {{ active_plan.signed_at|when }}</span>{% endif %}
+  </div>
+
+  <div class="grid side">
+    <form id="plan-form" class="card" onsubmit="return false">
+      <h2>Who can be paid</h2>
+      {% for p in payees %}
+      <label class="check-row">
+        <input type="checkbox" name="payees" value="{{ p.id }}" {{ 'checked' if p.id in selected }}>
+        <span><b>{{ p.name }}</b> <span class="tag">{{ p.category }}</span><br>
+          <small class="muted">account {{ p.account_number }} · payout to {{ p.paypal_email }}</small></span>
+      </label>
+      {% endfor %}
+
+      <h2 style="margin-top:20px">Limits</h2>
+      <div class="inline-fields">
+        <div class="field"><label>Monthly budget (₱)</label><input type="number" step="0.01" name="monthly_budget" value="{{ '%.2f'|format(plan.monthly_budget_minor/100) }}"></div>
+        <div class="field"><label>Max payments / month</label><input type="number" name="max_payments" value="{{ plan.max_payments_per_month }}"></div>
+        <div class="field"><label>Smallest payment (₱)</label><input type="number" step="0.01" name="amount_min" value="{{ '%.2f'|format(plan.amount_min_minor/100) }}"></div>
+        <div class="field"><label>Largest payment (₱)</label><input type="number" step="0.01" name="amount_max" value="{{ '%.2f'|format(plan.amount_max_minor/100) }}"></div>
+        <div class="field"><label>Ask me first above (₱)</label><input type="number" step="0.01" name="step_up_over" value="{{ '%.2f'|format(plan.step_up_over_minor/100) }}"></div>
+        <div class="field"><label>Plan expires after (days)</label><input type="number" name="valid_days" value="{{ plan.valid_days }}" min="1" max="90"></div>
+        <div class="field"><label>Pay from</label><input type="date" name="not_before" value="{{ plan.not_before }}"></div>
+        <div class="field"><label>Pay until</label><input type="date" name="not_after" value="{{ plan.not_after }}"></div>
+      </div>
+
+      <h2 style="margin-top:8px">Caps per category</h2>
+      {% for c in plan.caps %}
+      <div class="inline-fields cap" data-category="{{ c.category }}" data-period="{{ c.period }}" data-not-before="{{ c.not_before or '' }}" data-not-after="{{ c.not_after or '' }}" data-label="{{ c.label or '' }}">
+        <div class="field"><label><span class="tag">{{ c.category }}</span> {{ 'per term (' ~ c.not_before ~ ' to ' ~ c.not_after ~ ')' if c.period == 'WINDOW' else 'per month' }} (₱)</label>
+          <input type="number" step="0.01" class="cap-max" value="{{ '%.2f'|format(c.max_minor/100) }}"></div>
+      </div>
+      {% endfor %}
+      <input type="hidden" name="ofw_name" value="{{ plan.ofw_name }}"><input type="hidden" name="household" value="{{ plan.household }}">
+      <button class="btn block" id="review" type="button">Review and sign on this device <span class="spinner"></span></button>
+      <div id="plan-error" class="callout bad" hidden style="margin-top:10px"></div>
+    </form>
+
+    <div class="stack">
+      <div id="sheet" class="sign-sheet" hidden>
+        <h2>You are signing</h2>
+        <p class="muted"><small>Rendered from the exact bytes your key will sign. Every one of the <span id="n-disc"></span>
+          disclosures was re-hashed in this browser and matched a digest in the signed payload.</small></p>
+        <div id="sheet-body"></div>
+        <details><summary>Raw issuer JWT payload and disclosures</summary><pre id="sheet-raw"></pre></details>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="sign">Sign with device key <span class="spinner"></span></button>
+          <button class="btn ghost" id="cancel">Cancel</button>
+        </div>
+      </div>
+      <div id="signed" class="callout ok" hidden></div>
+      <div class="card flat">
+        <h3 style="margin-top:0">What the family and the AI can't change</h3>
+        <ul class="plain">
+          <li>The bill agent can only pay payees on this list, within these caps, until the plan expires.</li>
+          <li>Each payment reveals only the one payee and one cap it needs; the rest stays hidden from the verifier.</li>
+          <li>Anything above your step-up amount waits for your signature on this device.</li>
+          <li>Every check is done by deterministic code, never by the AI.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const form = document.getElementById("plan-form"), sheet = document.getElementById("sheet");
+  const review = document.getElementById("review"), err = document.getElementById("plan-error");
+  const collect = () => {
+    const fd = new FormData(form), data = Object.fromEntries(fd.entries());
+    data.payees = fd.getAll("payees");
+    data.caps = [...form.querySelectorAll(".cap")].map((el) => ({
+      category: el.dataset.category, period: el.dataset.period, not_before: el.dataset.notBefore,
+      not_after: el.dataset.notAfter, label: el.dataset.label, max: el.querySelector(".cap-max").value }));
+    return data;
+  };
+  let confirmResolve, confirmReject;
+  const ui = {
+    show(html, resolved, draft) {
+      document.getElementById("sheet-body").innerHTML = html;
+      document.getElementById("n-disc").textContent = resolved.disclosureCount;
+      document.getElementById("sheet-raw").textContent = JSON.stringify(
+        { header: resolved.header, payload: resolved.payload, disclosures: draft.disclosures }, null, 2);
+      sheet.hidden = false;
+      sheet.scrollIntoView({ behavior: "smooth", block: "start" });
+    },
+    confirmed: () => new Promise((res, rej) => { confirmResolve = res; confirmReject = rej; }),
+  };
+  document.getElementById("sign").onclick = (e) => { e.target.disabled = true; e.target.classList.add("busy"); confirmResolve(); };
+  document.getElementById("cancel").onclick = () => { sheet.hidden = true; review.disabled = false; review.classList.remove("busy"); confirmReject(new Error("cancelled")); };
+  review.onclick = async () => {
+    err.hidden = true; review.disabled = true; review.classList.add("busy");
+    try {
+      const { mandate_id } = await Padala.signPlan(collect(), ui);
+      sheet.hidden = true;
+      const done = document.getElementById("signed");
+      done.hidden = false;
+      done.innerHTML = `Plan signed and active. Mandate id <code>${Padala.esc(mandate_id.slice(0, 16))}…</code>. <a href="/ofw">Go to dashboard →</a>`;
+    } catch (e) {
+      if (e.message !== "cancelled") { err.hidden = false; err.textContent = e.message; }
+    } finally {
+      review.disabled = false; review.classList.remove("busy");
+      const s = document.getElementById("sign"); s.disabled = false; s.classList.remove("busy");
+    }
+  };
+})();
+</script>
+{% endblock %}
