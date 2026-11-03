@@ -1,0 +1,54 @@
+{
+  "_comment": "Demo payee registry. In sandbox mode each payee is a PayPal sandbox business account: set PAYEE_EMAIL_<env> in .env to your own. History is in centavos, keyed by usage period (YYYY-MM).",
+  "payees": [
+    {
+      "id": "bsa",
+      "env": "BSA",
+      "name": "Bacolod Sunrise Academy",
+      "aliases": ["BSA", "Bacolod Sunrise Academy Inc", "Bacolod Sunrise Academy Accounting"],
+      "category": "education",
+      "account_number": "BSA-2019-04417",
+      "paypal_email": "bsa-tuition@business.example.com",
+      "website": "https://bsa.example.edu.ph",
+      "history": {"2025-05": 1365000, "2025-10": 1365000, "2026-05": 1425000}
+    },
+    {
+      "id": "negros-power",
+      "env": "NEGROS_POWER",
+      "name": "Negros Power",
+      "aliases": ["Negros Electric and Power Corp", "Negros Electric and Power Corporation", "NEPC"],
+      "category": "utilities",
+      "account_number": "0412-3387-21",
+      "paypal_email": "negros-power@business.example.com",
+      "history": {
+        "2024-11": 251040, "2024-12": 258015, "2025-01": 243170, "2025-02": 246635,
+        "2025-03": 289320, "2025-04": 334285, "2025-05": 358760, "2025-06": 329045,
+        "2025-07": 281530, "2025-08": 269075, "2025-09": 264410, "2025-10": 275330,
+        "2025-11": 256290, "2025-12": 261140, "2026-01": 247825, "2026-02": 250260,
+        "2026-03": 295580, "2026-04": 341020, "2026-05": 367245, "2026-06": 335190,
+        "2026-07": 286035, "2026-08": 274510, "2026-09": 270255
+      }
+    },
+    {
+      "id": "botika-aling-nena",
+      "env": "BOTIKA",
+      "name": "Botika ni Aling Nena",
+      "aliases": ["Botika Aling Nena"],
+      "category": "medical",
+      "account_number": "SUKI-08812",
+      "paypal_email": "botika@business.example.com",
+      "history": {"2026-06": 125050, "2026-08": 98000, "2026-09": 141075}
+    },
+    {
+      "id": "casa-maria",
+      "env": "CASA_MARIA",
+      "name": "Casa Maria Boarding House",
+      "aliases": ["Casa Maria"],
+      "category": "housing",
+      "account_number": "ROOM-3B",
+      "paypal_email": "casa-maria@business.example.com",
+      "history": {"2026-04": 1600000, "2026-05": 1600000, "2026-06": 1600000,
+                  "2026-07": 1600000, "2026-08": 1600000, "2026-09": 1600000}
+    }
+  ]
+}
