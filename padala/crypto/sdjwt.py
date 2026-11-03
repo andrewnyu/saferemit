@@ -301,7 +301,7 @@ def _binding_claims(prev: SdJwt, aud: str, nonce: str, iat: int) -> dict:
     return {"iat": iat, "aud": aud, "nonce": nonce, "sd_hash": prev.sd_hash()}
 
 
-def _check_binding(payload: dict, prev: SdJwt, aud: str, nonce: str, now: int, max_age: int) -> None:
+def check_binding(payload: dict, prev: SdJwt, aud: str, nonce: str, now: int, max_age: int) -> None:
     if payload.get("aud") != aud:
         raise SDJWTError("key binding: wrong audience")
     if not isinstance(payload.get("nonce"), str) or payload.get("nonce") != nonce:
@@ -327,7 +327,7 @@ def verify_kb_jwt(token: SdJwt, holder_key: ec.EllipticCurvePublicKey, aud: str,
         decoded = jws.verify(token.kb_jwt, holder_key, expected_typ=KB_JWT_TYP)
     except jws.JWSError as exc:
         raise SDJWTError(f"key binding: {exc}") from exc
-    _check_binding(decoded.payload, token, aud, nonce, now, max_age)
+    check_binding(decoded.payload, token, aud, nonce, now, max_age)
     return decoded.payload
 
 
@@ -345,5 +345,5 @@ def create_kb_sd_jwt(prev: SdJwt, holder_key: ec.EllipticCurvePrivateKey, claims
 def verify_kb_sd_jwt(token: SdJwt, prev: SdJwt, holder_key: ec.EllipticCurvePublicKey,
                      aud: str, nonce: str, now: int, max_age: int = 300) -> VerifiedSdJwt:
     verified = verify(token, holder_key, expected_typ=KB_SD_JWT_TYP)
-    _check_binding(verified.payload, prev, aud, nonce, now, max_age)
+    check_binding(verified.payload, prev, aud, nonce, now, max_age)
     return verified
