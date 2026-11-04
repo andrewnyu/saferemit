@@ -29,8 +29,9 @@ from loopremit.config import get_settings  # noqa: E402
 
 SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
 MODELS_URL = "https://openrouter.ai/api/v1/models?output_modalities=speech"
-MODEL = "elevenlabs/eleven-v3"
-STYLE = "[strong Filipino accent]"
+MODEL = "elevenlabs/eleven-v3-conversational"
+VOICE = "u0P5zPuh3SvxTi9vSTCn"  # Zia, a Filipino voice from the ElevenLabs Voice Library
+STYLE = ""  # the accent comes from the voice, so no direction is needed
 PAUSE_SECONDS = 0.6
 
 
@@ -48,7 +49,7 @@ def duration(path: Path) -> float:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--voice", default="matilda")
+    parser.add_argument("--voice", default=VOICE)
     parser.add_argument("--model", default=MODEL)
     parser.add_argument("--style", default=STYLE, help="direction placed before each paragraph; not spoken")
     parser.add_argument("--voices", action="store_true")

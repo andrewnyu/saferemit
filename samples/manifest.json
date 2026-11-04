@@ -6,10 +6,10 @@
     "sha256": "df18228fca2f868a368a99227e1907c34a1256fd9055147c54141cc2a6b435ed"
   },
   {
-    "key": "negros-power",
-    "file": "negros-power.png",
-    "label": "Negros Power electricity bill (+62% vs last October)",
-    "sha256": "b911447d9ae6ad282d919942b61956331bda0f06585a0c6c54f00841497006c9"
+    "key": "liwanag-power",
+    "file": "liwanag-power.png",
+    "label": "Liwanag Power electricity bill (+62% vs last October)",
+    "sha256": "9470ad57ed54b98f36ca3546d6799b1ec902c4bd8b61e123512bdd8193f38147"
   },
   {
     "key": "casa-maria-rent",

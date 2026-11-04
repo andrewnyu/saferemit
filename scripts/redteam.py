@@ -87,7 +87,7 @@ def craft(services, key: str, *, agent_key=None, payee_patch: dict | None = None
 def tampered_amount() -> GatewayResult:
     """Agent edits the amount inside the closed mandate after signing it."""
     services, _, _ = world()
-    p, _ = craft(services, "negros-power")
+    p, _ = craft(services, "liwanag-power")
     open_seg, closed_seg = sdjwt.split_chain(p.chain)
     content = sdjwt.parse_disclosure(closed_seg.disclosures[0])
     forged_value = json.loads(json.dumps(content.value))
@@ -100,7 +100,7 @@ def tampered_amount() -> GatewayResult:
 def tampered_budget() -> GatewayResult:
     """Someone edits the OFW-signed open mandate to raise the budget."""
     services, _, _ = world()
-    p, _ = craft(services, "negros-power")
+    p, _ = craft(services, "liwanag-power")
     open_seg, closed_seg = sdjwt.split_chain(p.chain)
     for i, enc in enumerate(open_seg.disclosures):
         d = sdjwt.parse_disclosure(enc)
@@ -123,7 +123,7 @@ def payee_not_allowed() -> GatewayResult:
 def replay() -> GatewayResult:
     """Re-send a presentation the gateway already accepted and paid."""
     services, _, _ = world()
-    p, _ = craft(services, "negros-power")
+    p, _ = craft(services, "liwanag-power")
     first = services.gateway.process(p)
     assert first.paid, first.trace
     return services.gateway.process(p)
@@ -132,7 +132,7 @@ def replay() -> GatewayResult:
 def replay_fresh_nonce() -> GatewayResult:
     """Re-sign the same paid transaction with a fresh nonce (a buggy or greedy agent)."""
     services, _, _ = world()
-    p, content = craft(services, "negros-power")
+    p, content = craft(services, "liwanag-power")
     assert services.gateway.process(p).paid
     gw = services.gateway
     again = cm.build_presentation(open_token=sdjwt.parse(services.active_plan()["sd_jwt"]),
@@ -145,7 +145,7 @@ def replay_fresh_nonce() -> GatewayResult:
 def wrong_agent_key() -> GatewayResult:
     """A different agent (not the key in the OFW's cnf) signs a closed mandate."""
     services, _, _ = world()
-    p, _ = craft(services, "negros-power", agent_key=generate_private_key())
+    p, _ = craft(services, "liwanag-power", agent_key=generate_private_key())
     return services.gateway.process(p)
 
 
@@ -158,14 +158,14 @@ def forged_device_key() -> GatewayResult:
     draft = open_mandate.prepare(plan, services.agent_jwk, attacker.kid, services.clock())
     services.db.run("UPDATE plans SET sd_jwt = ? WHERE status = 'active'",
                     open_mandate.sign_with_software_key(draft, attacker.key).serialize())
-    p, _ = craft(services, "negros-power")
+    p, _ = craft(services, "liwanag-power")
     return services.gateway.process(p)
 
 
 def over_budget() -> GatewayResult:
     """Monthly budget ₱15,000: power (₱4,460.35) is paid, tuition (₱14,250) would exceed it."""
     services, _, _ = world(budget_minor=15_000_00)
-    first = _result_for(services, submit_sample(services, "negros-power"))
+    first = _result_for(services, submit_sample(services, "liwanag-power"))
     assert first.paid, first.trace
     return _result_for(services, submit_sample(services, "tuition"))
 
@@ -175,7 +175,7 @@ def expired_mandate() -> GatewayResult:
     services, _, clock = world()
     clock.t += 31 * 86_400
     time.time = clock
-    p, _ = craft(services, "negros-power")
+    p, _ = craft(services, "liwanag-power")
     return services.gateway.process(p)
 
 

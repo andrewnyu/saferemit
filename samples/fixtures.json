@@ -31,11 +31,11 @@
       "embedded_instructions": []
     }
   },
-  "b911447d9ae6ad282d919942b61956331bda0f06585a0c6c54f00841497006c9": {
-    "key": "negros-power",
-    "label": "negros-power",
+  "9470ad57ed54b98f36ca3546d6799b1ec902c4bd8b61e123512bdd8193f38147": {
+    "key": "liwanag-power",
+    "label": "liwanag-power",
     "extraction": {
-      "biller_name": "Negros Power",
+      "biller_name": "Liwanag Power",
       "biller_address": null,
       "account_number": "0412-3387-21",
       "account_name": "SANTOS, ROSARIO",

@@ -11,7 +11,7 @@ from dataclasses import asdict, dataclass
 from datetime import date
 
 from loopremit.evidence import (
-    DUPLICATE_DISTANCE, account_matches, hamming, line_items_sum_ok, line_items_total_minor,
+    DUPLICATE_DISTANCE, account_matches, hamming, has_line_items, line_items_sum_ok, line_items_total_minor,
     normalize_name, to_minor,
 )
 
@@ -105,7 +105,10 @@ def run_checks(extraction: dict, *, payees: list[dict], history: dict[str, int],
 
     total = to_minor(extraction["amount_due"])
     items = line_items_total_minor(extraction)
-    if line_items_sum_ok(extraction):
+    if not has_line_items(extraction):
+        checks.append(Check("line_items_sum", "warn",
+                            f"no line items on this bill, so nothing to check the ₱{total / 100:,.2f} total against"))
+    elif line_items_sum_ok(extraction):
         checks.append(Check("line_items_sum", "pass", f"{len(extraction['line_items'])} line items sum to ₱{total / 100:,.2f}"))
     else:
         checks.append(Check("line_items_sum", "fail",

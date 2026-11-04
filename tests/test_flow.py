@@ -1,6 +1,9 @@
 import json
 import time
+from dataclasses import replace
 
+from loopremit.intake.extract import extract_offline
+from loopremit.intake.schema import BillExtraction
 from loopremit.paypal.mock import MockPayPal
 from loopremit.simulation import build_world, fooled_reading_of_injection, sign_plan, submit_sample
 
@@ -9,10 +12,15 @@ def bill(services, bill_id):
     return dict(services.db.one("SELECT * FROM bills WHERE id = ?", bill_id))
 
 
+def with_line_items(result, items):
+    extraction = BillExtraction.model_validate({**result.extraction.model_dump(), "line_items": items})
+    return replace(result, extraction=extraction)
+
+
 def test_tuition_and_power_paid_automatically(planned):
     services, _ = planned
     tuition = submit_sample(services, "tuition")
-    power = submit_sample(services, "negros-power")
+    power = submit_sample(services, "liwanag-power")
     for bid in (tuition, power):
         b = bill(services, bid)
         assert b["status"] == "paid", b["status_detail"]
@@ -77,11 +85,40 @@ def test_flagged_bill_pays_only_with_the_ofw_signature(planned):
     assert bill(services, bid)["status"] == "paid"
 
 
+def test_bill_without_line_items_waits_for_the_ofw(planned, monkeypatch):
+    """Some bills print only a total. That can't be summed, so a person decides."""
+    services, device = planned
+    real = extract_offline
+
+    monkeypatch.setattr("loopremit.agent.extract_offline", lambda sha: with_line_items(real(sha), []))
+    bid = submit_sample(services, "tuition")
+    b = bill(services, bid)
+    assert b["status"] == "awaiting_ofw" and "no line items" in b["status_detail"]
+    results = {c["name"]: c["result"] for c in json.loads(b["checks"])["checks"]}
+    assert results["line_items_sum"] == "warn"
+    assert not [c for c in services.paypal.calls if c[0] == "charge"]
+    approval = services.db.one("SELECT * FROM approvals WHERE bill_id = ? AND kind = 'step_up'", bid)
+    result = services.agent.approve_step_up(
+        approval["id"], device.decide(json.loads(approval["payload"]), "approve", bill_id=bid))
+    assert result.paid, result.trace
+
+
+def test_line_items_that_do_not_add_up_are_still_refused(planned, monkeypatch):
+    services, _ = planned
+    real = extract_offline
+
+    wrong = [{"description": "Tuition", "amount": 1.00}]
+    monkeypatch.setattr("loopremit.agent.extract_offline", lambda sha: with_line_items(real(sha), wrong))
+    b = bill(services, submit_sample(services, "tuition"))
+    assert b["status"] == "rejected"
+    assert services.receipt(b["receipt_id"])["payload"]["error"] == "line_items_mismatch"
+
+
 def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, monkeypatch):
     monkeypatch.setattr(time, "time", clock)
     services, device = build_world(tmp_path, clock=clock, paypal=MockPayPal(hold_payouts=True))
     sign_plan(services, device)
-    bid = submit_sample(services, "negros-power")
+    bid = submit_sample(services, "liwanag-power")
     assert bill(services, bid)["status"] == "paying"
     services.paypal.hold_payouts = False
     clock.state["t"] += 10
@@ -92,10 +129,10 @@ def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, mo
 
 def test_returned_payout_refunds_and_gives_the_budget_back(tmp_path, clock, monkeypatch):
     monkeypatch.setattr(time, "time", clock)
-    paypal = MockPayPal(return_payouts_to={"negros-power@business.example.com"})
+    paypal = MockPayPal(return_payouts_to={"liwanag-power@business.example.com"})
     services, device = build_world(tmp_path, clock=clock, paypal=paypal)
     sign_plan(services, device)
-    bid = submit_sample(services, "negros-power")
+    bid = submit_sample(services, "liwanag-power")
     b = bill(services, bid)
     assert b["status"] == "failed" and "RETURNED" in b["status_detail"] and "capture refunded" in b["status_detail"]
     assert [c for c in paypal.calls if c[0] == "refund"]
@@ -128,8 +165,8 @@ def test_step_up_decline(planned):
 
 def test_duplicate_bill_rejected(planned):
     services, _ = planned
-    first = submit_sample(services, "negros-power")
-    second = submit_sample(services, "negros-power")
+    first = submit_sample(services, "liwanag-power")
+    second = submit_sample(services, "liwanag-power")
     assert bill(services, first)["status"] == "paid"
     b = bill(services, second)
     assert b["status"] == "rejected"

@@ -44,9 +44,12 @@ def line_items_total_minor(extraction: dict) -> int:
     return sum(to_minor(item["amount"]) for item in extraction.get("line_items", []))
 
 
+def has_line_items(extraction: dict) -> bool:
+    return bool(extraction.get("line_items"))
+
+
 def line_items_sum_ok(extraction: dict) -> bool:
-    items = extraction.get("line_items") or []
-    return bool(items) and line_items_total_minor(extraction) == to_minor(extraction["amount_due"])
+    return has_line_items(extraction) and line_items_total_minor(extraction) == to_minor(extraction["amount_due"])
 
 
 def dhash(image_bytes: bytes, size: int = 16) -> str:

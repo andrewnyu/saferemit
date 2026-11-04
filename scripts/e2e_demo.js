@@ -41,7 +41,7 @@ const OUT = process.env.OUT;
   console.log('signed:', (await page.textContent('#signed')).trim().slice(0, 60));
 
   // 2. Family uploads tuition + power bill (sample buttons)
-  for (const key of ['tuition', 'negros-power']) {
+  for (const key of ['tuition', 'liwanag-power']) {
     await page.goto(BASE + '/family');
     await page.click(`form[action="/family/samples/${key}"] button`);
     await page.waitForURL(/family\/bills\/\d+/);
@@ -89,7 +89,7 @@ const OUT = process.env.OUT;
   await shot('08-dashboard');
   const rows = await page.$$eval('.bill-list li', lis => lis.map(li => li.innerText.replace(/\s+/g, ' ').slice(0, 150)));
   rows.forEach(r => console.log('  ', r));
-  await page.click('.bill-list >> text=Negros Power');
+  await page.click('.bill-list >> text=Liwanag Power');
   await page.waitForURL(/ofw\/bills\/\d+/);
   await shot('09-bill-detail-power');
   const passes = await page.$$eval('.trace li.pass', l => l.length);

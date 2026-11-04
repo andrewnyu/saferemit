@@ -44,7 +44,7 @@ def main() -> None:
             services.start_vault()
             services.complete_vault()
         sign_plan(services, device)
-        for key, who in [("tuition", "Mama Rosario"), ("negros-power", "Mama Rosario"),
+        for key, who in [("tuition", "Mama Rosario"), ("liwanag-power", "Mama Rosario"),
                          ("hospital-doctored", "Cousin Jun"), ("prompt-injection", "Mama Rosario"),
                          ("casa-maria-rent", "Mama Rosario")]:
             bill_id = submit_sample(services, key, by=who)
