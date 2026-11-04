@@ -3,30 +3,30 @@
     "key": "tuition",
     "file": "tuition.png",
     "label": "School tuition statement (handwritten amounts)",
-    "sha256": "1cc9de9c6c31fd8ba15621c9f427bdf67c20999e3987192329929bea81840124"
+    "sha256": "df18228fca2f868a368a99227e1907c34a1256fd9055147c54141cc2a6b435ed"
   },
   {
     "key": "negros-power",
     "file": "negros-power.png",
     "label": "Negros Power electricity bill (+62% vs last October)",
-    "sha256": "1ad232e4c4fcc22eb0f602504971fd4071d0465434f28626b05f30869d1fcf4b"
+    "sha256": "b911447d9ae6ad282d919942b61956331bda0f06585a0c6c54f00841497006c9"
   },
   {
     "key": "casa-maria-rent",
     "file": "casa-maria-rent.png",
     "label": "Boarding house rent over the step-up threshold",
-    "sha256": "47eaea398318fdafdb6aac00f0989491b80606a4c28eee9f08e5d2f1c4036642"
+    "sha256": "b536b94189308cbd4aabab0b9e67d00ee8cde76825373ad362db6eb19168ea1c"
   },
   {
     "key": "hospital-doctored",
     "file": "hospital-doctored.png",
     "label": "Doctored hospital bill from an unknown clinic",
-    "sha256": "72cd396843b73d9d9fe5f401b8b9fbfff18eacd175badd7e15f0ff86e49bed17"
+    "sha256": "76a6075449fe85d12cc2fc164fa816465ac9a744394a014c2b15f574244129cd"
   },
   {
     "key": "prompt-injection",
     "file": "prompt-injection.png",
     "label": "Bill with a prompt injection asking to pay a new payee",
-    "sha256": "f4eaf3ed85aad68637a0c8b341ee61b4b358b1bc95bd6829ff872db1dd06be7f"
+    "sha256": "b618a25b57ea40f3cd6e8b21e944989475b8be2bd4dfec47d7d295837714a5b4"
   }
 ]

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui %}
+{% set role = 'ofw' %}{% set active = 'approvals' %}
+{% block title %}Approvals{% endblock %}
+{% block content %}
+<div class="stack">
+  <h1>Needs your decision</h1>
+  <p class="muted">Step-ups are bills over your threshold, or bills carrying warnings: the gateway will only pay them with your device signature over
+    this exact closed mandate. Escalations are bills the gateway already stopped; you can decline them for the record.</p>
+  {% for a in approvals %}{% set b = a.bill %}
+  <section class="card" id="approval-{{ a.id }}">
+    <div class="spread">
+      <div class="row">
+        <a href="/ofw/bills/{{ b.id }}"><img class="thumb" src="/bills/{{ b.id }}/image" alt="bill"></a>
+        <div>
+          <b>{{ b.extraction.biller_name if b.extraction else b.filename }}</b> <span class="tag">{{ a.kind|replace('_', '-') }}</span><br>
+          <small class="muted">#{{ b.id }} from {{ b.submitted_by }} · {{ a.created_at|when }}</small>
+        </div>
+      </div>
+      <div style="text-align:right"><div class="amount big">{{ ui.bill_amount(b) }}</div>{{ ui.status(b.status) }}</div>
+    </div>
+    <p class="callout {{ 'warn' if a.kind == 'step_up' else 'bad' }}" style="margin-top:12px">{{ a.reason }}</p>
+    {% if a.kind == 'step_up' and a.payload %}
+      <details open><summary>You would be signing this closed mandate</summary>
+        <dl class="kv">
+          <dt>Pay</dt><dd>{{ a.payload.payment_amount.amount|peso }} to <b>{{ a.payload.payee.name }}</b> ({{ a.payload.payee.paypal_email }})</dd>
+          <dt>Account</dt><dd>{{ a.payload.payee.account_number }}</dd>
+          <dt>Date</dt><dd>{{ a.payload.execution_date }}</dd>
+          <dt>Bill evidence</dt><dd><code>transaction_id {{ a.payload.transaction_id[:20] }}…</code></dd>
+        </dl>
+      </details>
+    {% endif %}
+    {{ ui.checks(b.checks) }}
+    {% if a.status == 'pending' %}
+    <div class="row" style="margin-top:12px">
+      {% if a.kind == 'step_up' %}
+      <button class="btn decide" data-id="{{ a.id }}" data-bill="{{ b.id }}" data-decision="approve" data-mandate='{{ a.payload|tojson }}'>Approve and sign <span class="spinner"></span></button>
+      {% endif %}
+      <button class="btn danger decide" data-id="{{ a.id }}" data-bill="{{ b.id }}" data-decision="decline" data-mandate='{{ (a.payload or {})|tojson }}'>Decline <span class="spinner"></span></button>
+      <a class="btn ghost" href="/ofw/bills/{{ b.id }}">Details</a>
+    </div>
+    <div class="callout bad result" hidden style="margin-top:10px"></div>
+    {% else %}
+    <p><span class="badge {{ 'ok' if a.status == 'approved' else 'muted' }}">{{ a.status }} {{ a.decided_at|when }}</span>
+      {% if a.decision_jws %}<small class="muted">signed with your device key</small>{% endif %}</p>
+    {% endif %}
+  </section>
+  {% else %}
+  <div class="card"><p class="muted">Nothing waiting for you.</p></div>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll(".decide").forEach((btn) => {
+  btn.onclick = async () => {
+    const card = btn.closest(".card"), out = card.querySelector(".result");
+    card.querySelectorAll(".decide").forEach((b) => (b.disabled = true));
+    btn.classList.add("busy");
+    try {
+      const res = await LoopRemit.signDecision(Number(btn.dataset.id), Number(btn.dataset.bill), btn.dataset.decision,
+                                            JSON.parse(btn.dataset.mandate));
+      location.href = `/ofw/bills/${res.bill_id}`;
+    } catch (e) {
+      out.hidden = false; out.textContent = e.message;
+      card.querySelectorAll(".decide").forEach((b) => (b.disabled = false));
+      btn.classList.remove("busy");
+    }
+  };
+});
+</script>
+{% endblock %}

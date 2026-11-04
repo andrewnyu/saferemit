@@ -1,8 +1,8 @@
 import json
 import time
 
-from padala.paypal.mock import MockPayPal
-from padala.simulation import build_world, fooled_reading_of_injection, sign_plan, submit_sample
+from loopremit.paypal.mock import MockPayPal
+from loopremit.simulation import build_world, fooled_reading_of_injection, sign_plan, submit_sample
 
 
 def bill(services, bill_id):
@@ -37,7 +37,7 @@ def test_doctored_hospital_bill_rejected_and_escalated(planned):
     receipt = services.receipt(b["receipt_id"])
     assert receipt["payload"]["error"] == "payee_not_allowed"
     failed = {s["step"] for s in receipt["trace"] if s["result"] == "fail"}
-    assert "c:payment.allowed_payees" in failed and "c:padala.evidence_required" in failed
+    assert "c:payment.allowed_payees" in failed and "c:loopremit.evidence_required" in failed
     approval = services.db.one("SELECT * FROM approvals WHERE bill_id = ?", bid)
     assert approval["kind"] == "escalation" and approval["status"] == "pending"
     services.agent.decline_escalation(approval["id"], device.decide({}, "decline", bill_id=bid))
@@ -46,14 +46,14 @@ def test_doctored_hospital_bill_rejected_and_escalated(planned):
 
 def test_fooled_model_cannot_add_payee(planned, monkeypatch):
     services, _ = planned
-    monkeypatch.setattr("padala.agent.extract_offline", lambda _sha: fooled_reading_of_injection())
+    monkeypatch.setattr("loopremit.agent.extract_offline", lambda _sha: fooled_reading_of_injection())
     b = bill(services, submit_sample(services, "prompt-injection"))
     assert b["status"] == "rejected"
     assert services.receipt(b["receipt_id"])["payload"]["error"] == "payee_not_allowed"
 
 
 def test_flagged_bill_for_a_real_payee_waits_for_the_ofw(planned):
-    """Claude's real reading of the injection bill: the school's name, plus warnings."""
+    """The AI model's real reading of the injection bill: the school's name, plus warnings."""
     services, device = planned
     bid = submit_sample(services, "prompt-injection")
     b = bill(services, bid)

@@ -7,10 +7,10 @@ import httpx2
 import pytest
 from PIL import Image
 
-from padala.evidence import sha256_hex
-from padala.intake import extract
-from padala.intake.checks import run_checks, seasonal_anomaly
-from padala.simulation import sample
+from loopremit.evidence import sha256_hex
+from loopremit.intake import extract
+from loopremit.intake.checks import run_checks, seasonal_anomaly
+from loopremit.simulation import sample
 
 PAYEES = json.loads(open("samples/payees.json").read())["payees"]
 
@@ -21,7 +21,7 @@ def _png() -> bytes:
     return buf.getvalue()
 
 
-def _claude(monkeypatch, response_json):
+def _anthropic(monkeypatch, response_json):
     seen = {}
 
     def handler(request):
@@ -41,12 +41,12 @@ def _message(stop_reason, text="", stop_details=None):
             "stop_sequence": None, "stop_details": stop_details, "usage": {"input_tokens": 1, "output_tokens": 1}}
 
 
-def test_claude_request_and_parse(monkeypatch):
+def test_anthropic_request_and_parse(monkeypatch):
     fixture = next(iter(extract.load_fixtures().values()))["extraction"]
-    seen = _claude(monkeypatch, _message("end_turn", json.dumps(fixture)))
-    result = extract.extract_with_claude(_png(), "test")
+    seen = _anthropic(monkeypatch, _message("end_turn", json.dumps(fixture)))
+    result = extract.extract_with_anthropic(_png(), "test")
     assert result.extraction.biller_name == fixture["biller_name"]
-    assert result.source == "claude:claude-opus-5-5"
+    assert result.source == "ai:claude-opus-5-5"
     body = seen["body"]
     assert body["model"] == "claude-opus-5-5" and body["fallbacks"] == "default"
     assert body["output_config"]["format"]["type"] == "json_schema"
@@ -55,18 +55,18 @@ def test_claude_request_and_parse(monkeypatch):
     assert "untrusted" in body["system"]
 
 
-def test_claude_refusal_is_handled(monkeypatch):
-    _claude(monkeypatch, _message("refusal", stop_details={"type": "refusal", "category": "cyber",
+def test_anthropic_refusal_is_handled(monkeypatch):
+    _anthropic(monkeypatch, _message("refusal", stop_details={"type": "refusal", "category": "cyber",
                                                            "explanation": "declined"}))
     with pytest.raises(extract.IntakeRefused) as info:
-        extract.extract_with_claude(_png(), "test")
+        extract.extract_with_anthropic(_png(), "test")
     assert info.value.category == "cyber"
 
 
-def test_claude_max_tokens_is_an_error(monkeypatch):
-    _claude(monkeypatch, _message("max_tokens", '{"biller_name": "trunc'))
+def test_anthropic_max_tokens_is_an_error(monkeypatch):
+    _anthropic(monkeypatch, _message("max_tokens", '{"biller_name": "trunc'))
     with pytest.raises(extract.IntakeError):
-        extract.extract_with_claude(_png(), "test")
+        extract.extract_with_anthropic(_png(), "test")
 
 
 def test_offline_fixture_only_for_known_images():
@@ -117,7 +117,7 @@ def test_openrouter_request_and_parse():
     seen, http = _openrouter(_openrouter_reply(json.dumps(fixture)))
     result = extract.extract_with_openrouter(_png(), "sk-test", http=http)
     assert result.extraction.biller_name == fixture["biller_name"]
-    assert result.source == "claude:anthropic/claude-opus-5.5" and "OpenRouter" in result.label
+    assert result.source == "ai:anthropic/claude-opus-5.5" and result.label == "Read by the AI model"
     body = seen["body"]
     assert seen["auth"] == "Bearer sk-test" and body["provider"]["require_parameters"] is True
     assert "untrusted" in body["messages"][0]["content"]

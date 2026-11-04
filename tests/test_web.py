@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 
-from padala.crypto import jws
-from padala.paypal.mock import MockPayPal
-from padala.services import Services
-from padala.simulation import SoftwareDevice, make_settings
-from padala.web.app import create_app
+from loopremit.crypto import jws
+from loopremit.paypal.mock import MockPayPal
+from loopremit.services import Services
+from loopremit.simulation import SoftwareDevice, make_settings
+from loopremit.web.app import create_app
 
 
 def test_web_demo_flow(tmp_path, clock, monkeypatch):
@@ -48,6 +48,6 @@ def test_web_demo_flow(tmp_path, clock, monkeypatch):
     assert "Gateway verification" in detail and "MOCK-CAPTURE-" in detail
 
     for url in ["/", "/ofw", "/ofw/plan", "/ofw/approvals", "/ofw/onboarding", "/family",
-                f"/bills/{bill_id}/image", "/.well-known/padala-gateway.json"]:
+                f"/bills/{bill_id}/image", "/.well-known/loopremit-gateway.json"]:
         assert client.get(url).status_code == 200, url
     assert client.post("/family/bills", files={"file": ("x.txt", b"hello", "text/plain")}).status_code == 400

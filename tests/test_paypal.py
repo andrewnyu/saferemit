@@ -4,12 +4,12 @@ from decimal import Decimal
 import httpx
 import pytest
 
-from padala.db import Database
-from padala.gateway.verifier import SettlementRequest
-from padala.paypal.client import PayPalError, PayPalREST
-from padala.paypal.fx import FxProvider
-from padala.paypal.mock import MockPayPal
-from padala.paypal.settlement import PayPalSettler, php_to_usd
+from loopremit.db import Database
+from loopremit.gateway.verifier import SettlementRequest
+from loopremit.paypal.client import PayPalError, PayPalREST
+from loopremit.paypal.fx import FxProvider
+from loopremit.paypal.mock import MockPayPal
+from loopremit.paypal.settlement import PayPalSettler, php_to_usd
 
 
 class FakePayPal:

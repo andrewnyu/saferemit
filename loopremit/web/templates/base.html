@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Loop Remit{% endblock %} · Loop Remit</title>
+  <link rel="stylesheet" href="/static/loopremit.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧾</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <div class="inner">
+      <a class="brand" href="/">Loop <span>Remit</span></a>
+      {% if role == 'ofw' %}<span class="role">OFW · Trusted Surface</span>{% elif role == 'family' %}<span class="role">Family · San Carlos City</span>{% endif %}
+      <nav>
+        {% if role == 'ofw' %}
+          <a href="/ofw" class="{{ 'active' if active == 'dash' }}">Dashboard</a>
+          <a href="/ofw/approvals" class="{{ 'active' if active == 'approvals' }}">Approvals{% set n = pending_count() %}{% if n %}<span class="pill-count">{{ n }}</span>{% endif %}</a>
+          <a href="/ofw/plan" class="{{ 'active' if active == 'plan' }}">Plan</a>
+          <a href="/ofw/onboarding" class="{{ 'active' if active == 'onboarding' }}">Setup</a>
+          <a href="/family">Family view →</a>
+        {% elif role == 'family' %}
+          <a href="/family" class="{{ 'active' if active == 'family' }}">Bills</a>
+          <a href="/ofw">OFW view →</a>
+        {% else %}
+          <a href="/ofw">OFW</a><a href="/family">Family</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  {% if paypal_mode == 'mock' or intake_mode != 'AI model' %}
+  <div class="modebar"><div class="inner">
+    {% if paypal_mode == 'mock' %}<b>Mock PayPal</b>: no network calls, no money; every id starts with <code>MOCK-</code>.{% else %}<b>PayPal sandbox</b>.{% endif %}
+    {% if intake_mode != 'AI model' %} · <b>Offline bill extraction</b>: labelled fixtures for the sample bills, no AI call.{% endif %}
+  </div></div>
+  {% endif %}
+  <main>{% block content %}{% endblock %}</main>
+  <script src="/static/trusted-surface.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
