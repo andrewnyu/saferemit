@@ -1,6 +1,6 @@
 // End-to-end browser check of the DESIGN.md demo script (mock mode).
 //
-//   PADALA_DATA_DIR=/tmp/padala-e2e PADALA_INTAKE_MODE=offline uvicorn padala.web.app:app --port 8765 &
+//   LOOPREMIT_DATA_DIR=/tmp/loopremit-e2e LOOPREMIT_INTAKE_MODE=offline uvicorn loopremit.web.app:app --port 8765 &
 //   mkdir -p /tmp/shots && BASE=http://127.0.0.1:8765 OUT=/tmp/shots SAMPLES=$PWD/samples node scripts/e2e_demo.js
 //
 // Needs Node and Playwright (npm i playwright; npx playwright install chromium).

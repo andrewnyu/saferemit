@@ -3,13 +3,13 @@
   "payees": [
     {
       "id": "bsa",
-      "env": "BSA",
-      "name": "Bacolod Sunrise Academy",
-      "aliases": ["BSA", "Bacolod Sunrise Academy Inc", "Bacolod Sunrise Academy Accounting"],
+      "env": "SCSA",
+      "name": "San Carlos Sunrise Academy",
+      "aliases": ["SCSA", "San Carlos Sunrise Academy Inc", "San Carlos Sunrise Academy Accounting"],
       "category": "education",
-      "account_number": "BSA-2019-04417",
-      "paypal_email": "bsa-tuition@business.example.com",
-      "website": "https://bsa.example.edu.ph",
+      "account_number": "SCSA-2019-04417",
+      "paypal_email": "scsa-tuition@business.example.com",
+      "website": "https://scsa.example.edu.ph",
       "history": {"2025-05": 1365000, "2025-10": 1365000, "2026-05": 1425000}
     },
     {

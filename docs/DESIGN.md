@@ -1,6 +1,6 @@
-# Padala: design
+# Loop Remit: design
 
-Padala lets an overseas Filipino worker (OFW) pay the family's bills directly, under rules the OFW signs once, instead of sending cash. It is an entry for the PayPal AI Hackathon 2026 (deadline 2026-11-12 12:00 PT; judged equally on technical implementation, design, impact, innovation and presentation).
+Loop Remit is a closed-loop remittance: it lets an overseas Filipino worker (OFW) pay the family's bills directly, under rules the OFW signs once, instead of sending cash. It is an entry for the PayPal AI Hackathon 2026 (deadline 2026-11-12 12:00 PT; judged equally on technical implementation, design, impact, innovation and presentation).
 
 ## Problem
 
@@ -28,12 +28,12 @@ Treat a remittance plan as an AP2 v0.2 open Payment Mandate (https://github.com/
    - `cnf` holds the bill agent's public JWK; `exp` is short (about 30 days).
    - Built-in AP2 constraints: `payment.allowed_payees` (array elements selectively disclosable), `payment.budget` + `payment.agent_recurrence` (monthly), `payment.amount_range`, `payment.execution_date`.
    - Custom constraint types (AP2 allows new `type`s with schema + evaluation algorithm):
-     - `padala.category_cap`: e.g. education ₱15k per term, medical ₱10k per month
-     - `padala.evidence_required`: the bill image hash must be bound via `payment.reference`
-     - `padala.step_up_over`: above a threshold, switch to human-present mode and the OFW signs the closed mandate
+     - `loopremit.category_cap`: e.g. education ₱15k per term, medical ₱10k per month
+     - `loopremit.evidence_required`: the bill image hash must be bound via `payment.reference`
+     - `loopremit.step_up_over`: above a threshold, switch to human-present mode and the OFW signs the closed mandate
 2. **Bill intake (AI, not a chatbot)**
    - Family uploads photos of bills, school statements (often handwritten), prescriptions, or official receipts for reimbursement, in Tagalog, Hiligaynon or Cebuano.
-   - Claude vision with structured output extracts: biller, account number, amount, currency, due date, line items, category.
+   - An AI vision model with structured output extracts: biller, account number, amount, currency, due date, line items, category.
    - Checks:
      - payee registry match (the biller is in the allowed payees and the account number matches history)
      - line items sum to the total
@@ -55,10 +55,10 @@ Treat a remittance plan as an AP2 v0.2 open Payment Mandate (https://github.com/
 
 The full narration and shot list are in [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md).
 
-1. OFW in California sets up the plan and signs.
-2. Mom in Bacolod uploads a tuition statement and a power bill. AI extracts both and flags the power bill +62% vs last October but within its cap. Both are paid automatically.
+1. OFW working abroad sets up the plan and signs.
+2. Mom in San Carlos City, Negros Occidental uploads a tuition statement and a power bill. AI extracts both and flags the power bill +62% vs last October but within its cap. Both are paid automatically.
 3. A cousin uploads a doctored "hospital bill" from an unknown clinic. AI flags tampering; the gateway rejects it (`payee not in allowed_payees`); it escalates to the OFW, who declines.
-4. A prompt injection inside a bill tells the agent to pay a new payee. Claude reports it, and the gateway holds the bill for the OFW, who declines. The red team shows that even a fooled model cannot add a payee.
+4. A prompt injection inside a bill tells the agent to pay a new payee. The AI model reports it, and the gateway holds the bill for the OFW, who declines. The red team shows that even a fooled model cannot add a payee.
 5. Dashboard with every peso and signed receipts.
 
 ## Honest limits

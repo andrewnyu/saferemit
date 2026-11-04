@@ -19,9 +19,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from padala.config import get_settings  # noqa: E402
-from padala.services import Services, seed_registry  # noqa: E402
-from padala.simulation import SoftwareDevice, sign_plan, submit_sample  # noqa: E402
+from loopremit.config import get_settings  # noqa: E402
+from loopremit.services import Services, seed_registry  # noqa: E402
+from loopremit.simulation import SoftwareDevice, sign_plan, submit_sample  # noqa: E402
 
 
 def main() -> None:

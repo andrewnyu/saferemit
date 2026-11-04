@@ -18,10 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from padala.config import get_settings  # noqa: E402
-from padala.evidence import line_items_sum_ok  # noqa: E402
-from padala.intake.checks import match_payee  # noqa: E402
-from padala.intake.extract import IntakeError, extract_bill  # noqa: E402
+from loopremit.config import get_settings  # noqa: E402
+from loopremit.evidence import line_items_sum_ok  # noqa: E402
+from loopremit.intake.checks import match_payee  # noqa: E402
+from loopremit.intake.extract import IntakeError, extract_bill  # noqa: E402
 
 FIELDS = ("biller_name", "account_number", "amount_due", "currency", "due_date", "category")
 

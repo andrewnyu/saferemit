@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from padala.crypto import jws, sdjwt
-from padala.crypto.b64 import b64url_decode, b64url_encode
-from padala.crypto.jwk import generate_private_key, load_public_jwk, public_jwk, thumbprint
-from padala.crypto.sdjwt import SD, SDJWTError
+from loopremit.crypto import jws, sdjwt
+from loopremit.crypto.b64 import b64url_decode, b64url_encode
+from loopremit.crypto.jwk import generate_private_key, load_public_jwk, public_jwk, thumbprint
+from loopremit.crypto.sdjwt import SD, SDJWTError
 
 NOW = 1_800_000_000
 
@@ -94,7 +94,7 @@ def issued():
     claims = {
         "iss": "ofw",
         "name": SD("Maria"),
-        "address": SD({"city": SD("Bacolod"), "country": "PH"}),
+        "address": SD({"city": SD("San Carlos City"), "country": "PH"}),
         "payees": [SD({"id": "school"}), SD({"id": "power"}), {"id": "always-visible"}],
     }
     token = sdjwt.issue(claims, key, {"typ": "example+sd-jwt"})
@@ -107,7 +107,7 @@ def test_sd_jwt_full_disclosure(issued):
     assert verified.claims == {
         "iss": "ofw",
         "name": "Maria",
-        "address": {"city": "Bacolod", "country": "PH"},
+        "address": {"city": "San Carlos City", "country": "PH"},
         "payees": [{"id": "school"}, {"id": "power"}, {"id": "always-visible"}],
     }
     assert verified.payload["_sd_alg"] == "sha-256"

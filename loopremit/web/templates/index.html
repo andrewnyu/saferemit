@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Welcome{% endblock %}
+{% block content %}
+<div class="stack">
+  <section class="card hero">
+    <h1>Pay the family's bills, not just send cash.</h1>
+    <p>Loop Remit turns a remittance into a <b>closed loop</b>: a <b>signed plan</b>: the OFW signs the rules once on their own device, an AI bill
+      agent prepares each payment from a photo of the bill, and a deterministic gateway checks every signature and
+      every rule before PayPal moves a single peso.</p>
+  </section>
+
+  <div class="grid two">
+    <a class="card" href="/ofw" style="text-decoration:none;color:inherit">
+      <h2>I work abroad (OFW) →</h2>
+      <p class="muted">Register your device key, link PayPal, sign the plan, approve big bills, see every peso.</p>
+      <div class="row">
+        <span class="badge {{ 'ok' if device else 'muted' }}">{{ 'Device key ✓' if device else 'No device key' }}</span>
+        <span class="badge {{ 'ok' if vault else 'muted' }}">{{ 'PayPal linked ✓' if vault else 'PayPal not linked' }}</span>
+        <span class="badge {{ 'ok' if plan else 'muted' }}">{{ 'Plan signed ✓' if plan else 'No plan' }}</span>
+      </div>
+    </a>
+    <a class="card" href="/family" style="text-decoration:none;color:inherit">
+      <h2>I'm family in the Philippines →</h2>
+      <p class="muted">Snap a bill, see whether it's paid, and how much is left for school, power, medicine and rent.</p>
+      <span class="badge muted">{{ n_bills }} bills so far</span>
+    </a>
+  </div>
+
+  <section class="card flat">
+    <h2>How a peso moves</h2>
+    <ol class="steps">
+      <li><b>OFW signs an open Payment Mandate</b> (AP2 <code>mandate.payment.open.1</code>, SD-JWT) with a non-extractable WebCrypto key: allowed payees, monthly budget, caps per category, a step-up threshold, a 30-day expiry.</li>
+      <li><b>Family uploads a bill.</b> The AI model reads it into a strict schema; deterministic checks compare it with the payee registry, the line items, seasonal history and earlier bills.</li>
+      <li><b>The bill agent signs a closed mandate</b> (<code>mandate.payment.1</code>) with its own key, revealing only the payee and cap it needs.</li>
+      <li><b>The gateway verifies everything</b> without any AI: signatures, digests, key binding, every constraint, the budget ledger, replay. It signs a receipt either way.</li>
+      <li><b>PayPal settles</b>: the OFW's vaulted wallet is charged in USD and the payee is paid in PHP via Payouts.</li>
+    </ol>
+  </section>
+
+  <form method="post" action="/demo/reset" onsubmit="return confirm('Wipe all demo data (plans, bills, receipts, registered keys)?')">
+    <button class="btn ghost small" type="submit">Reset demo data</button>
+    <small class="muted">Gateway public key: <a href="/.well-known/loopremit-gateway.json">/.well-known/loopremit-gateway.json</a></small>
+  </form>
+</div>
+{% endblock %}

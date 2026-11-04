@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% set role = 'ofw' %}
+{% block title %}Simulated PayPal approval{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:20px auto">
+  <div class="callout warn"><b>Simulated PayPal approval (mock mode).</b> In sandbox mode this is PayPal's own page.</div>
+  <h1 style="margin-top:14px">Save PayPal for Loop Remit?</h1>
+  <p>Loop Remit would like to charge your PayPal wallet for future bill payments you authorise.</p>
+  <p class="muted"><small>Setup token <code>{{ token }}</code></small></p>
+  <div class="row">
+    <a class="btn" href="/ofw/vault/return?approval_token_id={{ token }}">Agree and continue</a>
+    <a class="btn ghost" href="/ofw/onboarding?vault=cancelled">Cancel</a>
+  </div>
+</div>
+{% endblock %}

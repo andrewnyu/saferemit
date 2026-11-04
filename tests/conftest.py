@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from padala.simulation import build_world, sign_plan
+from loopremit.simulation import build_world, sign_plan
 
 # A fixed "now" inside the sample bills' window: 2026-11-03 10:00 Asia/Manila.
 DEMO_NOW = 1_793_671_200
