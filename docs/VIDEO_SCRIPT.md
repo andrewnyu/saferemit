@@ -8,7 +8,7 @@ Record in PayPal sandbox mode with real bill reading (no yellow "Mock PayPal" ba
 
 Last year, Filipinos working abroad sent home more than thirty-five billion dollars in cash. Once that cash lands, the sender can't see where it goes. In a BCG survey of overseas Filipino workers, fewer than half consistently tracked how the money was used, and family conflict over money and school rose after they left.
 
-Loop Remit makes a remittance a closed loop. Instead of sending cash, the worker signs a plan, the plan pays the family's bills directly, and proof of every payment comes back.
+Loop Remit makes a remittance a closed loop with two sides. Instead of sending cash, the worker abroad signs a plan. On the family's side at home, the plan pays the bills directly, and proof of every payment comes back.
 
 > OFW, Setup: create the device key, link PayPal on PayPal's own sandbox page. Then OFW, Plan.
 
@@ -16,7 +16,7 @@ Meet Raphael Jude, an engineer from San Carlos, working abroad. Raphael links a 
 
 > Family: tap the tuition sample, show the bill page. Then OFW, the bill's verification trace.
 
-Back home in San Carlos City, Negros Occidental, Raphael's mother photographs a tuition statement. The AI model reads it into a strict schema. Plain code then checks it: is the payee registered, does the account match, do the items add up? The agent signs a payment, a deterministic gateway verifies the whole chain, and PayPal moves the money: dollars from Raphael's saved wallet, pesos to the school.
+On the family's side, in San Carlos City, Negros Occidental, Raphael's mother photographs a tuition statement. The AI model reads it into a strict schema. Plain code then checks it: is the payee registered, does the account match, do the items add up? The agent signs a payment, a deterministic gateway verifies the whole chain, and PayPal moves the money: dollars from Raphael's saved wallet, pesos to the school.
 
 > Family: Negros Power sample, point at the +62% warning.
 
@@ -38,6 +38,6 @@ A rent bill above the limit waits for Raphael's signature on that exact payment.
 
 Raphael's dashboard shows every peso: the bill photo, the exchange rate, PayPal's confirmation, a signed receipt, and every check the gateway ran.
 
-> End card: repo URL.
+> End card (the repo link is in the submission, not the video).
 
 The AI reads the bills. It never decides whether money moves. That's Loop Remit: closed-loop remittances, with rules the sender signs, settled on PayPal.
