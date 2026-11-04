@@ -9,10 +9,11 @@ def bill(services, bill_id):
     return dict(services.db.one("SELECT * FROM bills WHERE id = ?", bill_id))
 
 
+
 def test_tuition_and_power_paid_automatically(planned):
     services, _ = planned
     tuition = submit_sample(services, "tuition")
-    power = submit_sample(services, "negros-power")
+    power = submit_sample(services, "liwanag-power")
     for bid in (tuition, power):
         b = bill(services, bid)
         assert b["status"] == "paid", b["status_detail"]
@@ -81,7 +82,7 @@ def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, mo
     monkeypatch.setattr(time, "time", clock)
     services, device = build_world(tmp_path, clock=clock, paypal=MockPayPal(hold_payouts=True))
     sign_plan(services, device)
-    bid = submit_sample(services, "negros-power")
+    bid = submit_sample(services, "liwanag-power")
     assert bill(services, bid)["status"] == "paying"
     services.paypal.hold_payouts = False
     clock.state["t"] += 10
@@ -92,10 +93,10 @@ def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, mo
 
 def test_returned_payout_refunds_and_gives_the_budget_back(tmp_path, clock, monkeypatch):
     monkeypatch.setattr(time, "time", clock)
-    paypal = MockPayPal(return_payouts_to={"negros-power@business.example.com"})
+    paypal = MockPayPal(return_payouts_to={"liwanag-power@business.example.com"})
     services, device = build_world(tmp_path, clock=clock, paypal=paypal)
     sign_plan(services, device)
-    bid = submit_sample(services, "negros-power")
+    bid = submit_sample(services, "liwanag-power")
     b = bill(services, bid)
     assert b["status"] == "failed" and "RETURNED" in b["status_detail"] and "capture refunded" in b["status_detail"]
     assert [c for c in paypal.calls if c[0] == "refund"]
@@ -128,8 +129,8 @@ def test_step_up_decline(planned):
 
 def test_duplicate_bill_rejected(planned):
     services, _ = planned
-    first = submit_sample(services, "negros-power")
-    second = submit_sample(services, "negros-power")
+    first = submit_sample(services, "liwanag-power")
+    second = submit_sample(services, "liwanag-power")
     assert bill(services, first)["status"] == "paid"
     b = bill(services, second)
     assert b["status"] == "rejected"

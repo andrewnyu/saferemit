@@ -4,40 +4,42 @@ Record in PayPal sandbox mode with real bill reading (no yellow "Mock PayPal" ba
 
 ## Narration
 
-> Title card: Loop Remit, closed-loop remittances. Then the home page.
+> Infographic: the $35.63B record, then the sender's view ending where the cash lands, then the BCG survey numbers. Sources stay on screen. Problem, who it's for, and why it matters (Presentation, Impact).
 
-Last year, Filipinos working abroad sent home more than thirty-five billion dollars in cash. Once that cash lands, the sender can't see where it goes. In a BCG survey of overseas Filipino workers, fewer than half consistently tracked how the money was used, and family conflict over money and school rose after they left.
+Last year, Filipinos working abroad sent home more than thirty-five billion dollars in cash. But once it lands, the sender can't see where it goes. In a BCG survey of overseas Filipino workers, fewer than half consistently tracked how it was used, and only eight percent always asked for receipts.
 
-Loop Remit makes a remittance a closed loop with two sides. Instead of sending cash, the worker abroad signs a plan. On the family's side at home, the plan pays the bills directly, and proof of every payment comes back.
+> Infographic: the two sides close into a loop (Innovation).
 
-> OFW, Setup: create the device key, link PayPal on PayPal's own sandbox page. Then OFW, Plan.
+Loop Remit turns that into a closed loop, with two sides. The worker abroad signs a plan instead of sending cash. At home, the family sends in bills, the plan pays them directly, and proof comes back.
 
-Meet Raphael Jude, an engineer from San Carlos, working abroad. Raphael links a PayPal wallet once, then sets the rules: who can be paid, a monthly budget, a cap for each category, and the amount above which Raphael decides personally. The browser signs those rules with a key that can't leave the device. That signed plan is an AP2 payment mandate.
+> OFW, Setup: create the device key, link PayPal on PayPal's own sandbox page. Then OFW, Plan (Technological Implementation).
 
-> Family: tap the tuition sample, show the bill page. Then OFW, the bill's verification trace.
+Meet Raphael Jude, an engineer from San Carlos, working abroad. Raphael links a PayPal wallet once, then sets the rules: who can be paid, a monthly budget, category caps, and when Raphael decides personally. The browser signs them with a key that can't leave the device. That signed plan is an AP2 payment mandate.
 
-On the family's side, in San Carlos City, Negros Occidental, Raphael's mother photographs a tuition statement. The AI model reads it into a strict schema. Plain code then checks it: is the payee registered, does the account match, do the items add up? The agent signs a payment, a deterministic gateway verifies the whole chain, and PayPal moves the money: dollars from Raphael's saved wallet, pesos to the school.
+> Family: tap the tuition sample, show the bill page. Then OFW, the bill's verification trace (Technological Implementation, Design).
 
-> Family: Negros Power sample, point at the +62% warning.
+Now the family's side, in San Carlos City, Negros Occidental. Raphael's mother photographs a tuition statement. The AI model reads it into a strict schema, then plain code checks it. Is the school registered? Do the items add up? The agent signs a payment, a deterministic gateway verifies the whole chain, and PayPal moves the money: dollars from Raphael's vaulted wallet, pesos to the school.
+
+> Family: Liwanag Power sample, point at the +62% warning.
 
 The power bill is up sixty-two percent on last October. Loop Remit flags it, but it's within the cap, so it's paid, and Raphael sees the warning.
 
 > Family: upload hospital-doctored.png as Cousin Jun. Point at the tampering lines and "Stopped by gateway".
 
-Now the hard cases. A cousin uploads a hospital bill from a clinic Raphael never approved. The AI model notices the total looks pasted over and the items don't add up. But that decision isn't the model's. The clinic isn't on the signed list, so the gateway refuses.
+Now the hard cases. A cousin uploads a hospital bill from a clinic Raphael never approved. The AI model sees the total looks pasted over. But that call isn't the model's to make. The clinic isn't on the signed list, so the gateway refuses.
 
 > Family: prompt-injection sample. Then OFW, Approvals: Decline. Then a quick cut of `python scripts/redteam.py` ending on 12/12.
 
-This notice tells any AI reading it to send the money to a new account. The model doesn't obey. It reports the attempt, and the gateway holds the bill until Raphael decides. Raphael declines. And if a model were fooled? The red team tests that too: a payee outside the signed list is refused, whatever the AI says.
+This notice tells any AI reading it to send the money to a new account. The model doesn't obey. It reports the attempt, and the gateway holds the bill until Raphael declines. And if a model were fooled? The red team tests that too: a payee outside the signed list is refused, whatever the AI says.
 
 > Family: Casa Maria rent sample. OFW, Approvals: Approve and sign.
 
-A rent bill above the limit waits for Raphael's signature on that exact payment. Raphael approves it on the device, and it's paid.
+A rent bill above the limit waits for Raphael's signature on that exact payment. Raphael approves on the device, and it's paid.
 
 > OFW, Dashboard, then open a paid bill: FX rate, PayPal ids, signed receipt.
 
 Raphael's dashboard shows every peso: the bill photo, the exchange rate, PayPal's confirmation, a signed receipt, and every check the gateway ran.
 
-> End card (the repo link is in the submission, not the video).
+> End card (the repo link is in the submission, not the video). Back to the problem: why it matters.
 
-The AI reads the bills. It never decides whether money moves. That's Loop Remit: closed-loop remittances, with rules the sender signs, settled on PayPal.
+The bills get paid, the sender gets proof, and nobody has to ask for receipts. The AI reads the bills, but never decides whether money moves. That's Loop Remit: closed-loop remittances, on rules the sender signs, settled on PayPal.

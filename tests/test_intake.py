@@ -77,7 +77,7 @@ def test_offline_fixture_only_for_known_images():
 
 
 def test_seasonal_anomaly_power_bill():
-    history = next(p for p in PAYEES if p["id"] == "negros-power")["history"]
+    history = next(p for p in PAYEES if p["id"] == "liwanag-power")["history"]
     a = seasonal_anomaly(4_460_35, "2026-10", history)
     assert a["pct_vs_last_year"] == 62 and a["flag"]
     normal = seasonal_anomaly(2_800_00, "2026-10", history)

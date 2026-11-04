@@ -40,7 +40,7 @@ def test_web_demo_flow(tmp_path, clock, monkeypatch):
     assert jws.signing_input(draft["draft"]["header"], draft["draft"]["payload"]) == signing_input
     assert client.post(f"/api/ofw/plan/{draft['plan_id']}/sign", json={"signature": signature}).status_code == 200
 
-    r = client.post("/family/samples/negros-power", data={"submitted_by": "Mama"}, follow_redirects=False)
+    r = client.post("/family/samples/liwanag-power", data={"submitted_by": "Mama"}, follow_redirects=False)
     bill_url = r.headers["location"]
     assert "Paid" in client.get(bill_url).text
     bill_id = int(bill_url.rsplit("/", 1)[1])

@@ -13,13 +13,13 @@
       "history": {"2025-05": 1365000, "2025-10": 1365000, "2026-05": 1425000}
     },
     {
-      "id": "negros-power",
-      "env": "NEGROS_POWER",
-      "name": "Negros Power",
+      "id": "liwanag-power",
+      "env": "LIWANAG_POWER",
+      "name": "Liwanag Power",
       "aliases": ["Negros Electric and Power Corp", "Negros Electric and Power Corporation", "NEPC"],
       "category": "utilities",
       "account_number": "0412-3387-21",
-      "paypal_email": "negros-power@business.example.com",
+      "paypal_email": "liwanag-power@business.example.com",
       "history": {
         "2024-11": 251040, "2024-12": 258015, "2025-01": 243170, "2025-02": 246635,
         "2025-03": 289320, "2025-04": 334285, "2025-05": 358760, "2025-06": 329045,

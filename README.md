@@ -93,7 +93,7 @@ Open http://localhost:8000. Without a `.env` file this runs with `PAYPAL_MODE=mo
 
 1. **OFW → Setup**: *Create device key*, then *Link PayPal wallet* and approve on the simulated PayPal page.
 2. **OFW → Plan**: *Review and sign on this device*. The browser re-hashes all nine disclosures, renders the plan from the exact bytes it will sign, and signs them with the non-extractable key.
-3. **Family**: tap the *tuition* and *Negros Power* sample bills. Both are paid automatically. The power bill shows a warning, `+62% vs Oct 2025`, but it is within its cap.
+3. **Family**: tap the *tuition* and *Liwanag Power* sample bills. Both are paid automatically. The power bill shows a warning, `+62% vs Oct 2025`, but it is within its cap.
 4. **Family**: upload `samples/hospital-doctored.png` as "Cousin Jun". The AI flags signs of tampering, the line items don't add up, and the gateway stops the payment with `payee_not_allowed`. It goes to **OFW → Approvals**, where the OFW declines it with a signature.
 5. **Family**: tap the *prompt injection* sample. The bill tells the AI to pay a "new account". The AI model names the real school and reports the attempt, so the gateway holds the bill until the OFW decides in **Approvals**. If a fooled model named the attacker instead, the gateway would refuse anything outside `allowed_payees`; `redteam.py` tests both.
 6. Optional: tap the *Casa Maria rent* sample (₱16,000, above the ₱15,000 step-up). It waits in Approvals until the OFW signs.
@@ -132,7 +132,7 @@ python scripts/seed.py --demo-data
    PAYPAL_CLIENT_SECRET=...
    LOOPREMIT_BASE_URL=http://localhost:8000
    PAYEE_EMAIL_SCSA=school-business@personal.example.com
-   PAYEE_EMAIL_NEGROS_POWER=power-business@personal.example.com
+   PAYEE_EMAIL_LIWANAG_POWER=power-business@personal.example.com
    PAYEE_EMAIL_BOTIKA=pharmacy-business@personal.example.com
    PAYEE_EMAIL_CASA_MARIA=landlord-business@personal.example.com
    ```
