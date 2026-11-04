@@ -1,23 +1,27 @@
 #!/usr/bin/env python
 """Turn the narration in docs/VIDEO_SCRIPT.md into audio with ElevenLabs via OpenRouter.
 
-Each paragraph is voiced separately and joined with a short pause, so
-narration.json records exactly when each one starts. Needs OPENROUTER_API_KEY (in
-the environment or .env) and ffmpeg. Output goes to var/video/, which is gitignored.
+The whole script is voiced as one take, because separate takes can sound like
+different people. The audio is then transcribed with word timestamps and aligned
+to the script, so narration.json records when each paragraph starts. Needs
+OPENROUTER_API_KEY (in the environment or .env) and ffmpeg. Output goes to
+var/video/, which is gitignored.
 
     python scripts/make_narration.py
-    python scripts/make_narration.py --voice sarah
-    python scripts/make_narration.py --voices    # list the voices this model accepts
+    python scripts/make_narration.py --voice OPouXJLzlYeaXfgM6Q7O --model elevenlabs/eleven-v3-conversational
+    python scripts/make_narration.py --retime    # keep the take, redo the speed and timings
+    python scripts/make_narration.py --voices    # list the stock voices this model accepts
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
+import difflib
 import json
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import httpx
@@ -28,11 +32,14 @@ sys.path.insert(0, str(ROOT))
 from loopremit.config import get_settings  # noqa: E402
 
 SPEECH_URL = "https://openrouter.ai/api/v1/audio/speech"
+TRANSCRIBE_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
 MODELS_URL = "https://openrouter.ai/api/v1/models?output_modalities=speech"
-MODEL = "elevenlabs/eleven-v3-conversational"
-VOICE = "u0P5zPuh3SvxTi9vSTCn"  # Zia, a Filipino voice from the ElevenLabs Voice Library
-STYLE = ""  # the accent comes from the voice, so no direction is needed
-PAUSE_SECONDS = 0.6
+MODEL = "elevenlabs/eleven-multilingual-v2"
+VOICE = "uB4mdw2feSGsIhOhlVRR"  # Carmela, a young Filipino voice from the ElevenLabs Voice Library
+SEED = 42
+TEMPO = 1.02  # keeps the video safely under three minutes without changing the pitch
+MAX_CHARS = 5000
+TAIL_SECONDS = 0.3  # how long the picture holds after the last word
 
 
 def narration_paragraphs() -> list[str]:
@@ -47,12 +54,43 @@ def duration(path: Path) -> float:
     return float(out)
 
 
+def transcribe_words(path: Path, key: str) -> list[dict]:
+    response = httpx.post(TRANSCRIBE_URL, headers={"Authorization": f"Bearer {key}"}, timeout=600, json={
+        "model": "openai/whisper-1", "response_format": "verbose_json", "timestamp_granularities": ["word"],
+        "input_audio": {"data": base64.b64encode(path.read_bytes()).decode(), "format": "mp3"},
+    })
+    response.raise_for_status()
+    return response.json()["words"]
+
+
+def normalized(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower().replace("-", " "))
+
+
+def timings(paragraphs: list[str], words: list[dict], total: float) -> list[dict]:
+    """Find where each paragraph's first words fall in the transcript."""
+    script = [(i, w) for i, paragraph in enumerate(paragraphs) for w in normalized(paragraph)]
+    heard = [(j, n) for j, word in enumerate(words) for n in normalized(word["word"])]
+    blocks = difflib.SequenceMatcher(None, [w for _, w in script], [n for _, n in heard], autojunk=False).get_matching_blocks()
+    starts = [0.0]
+    for i in range(1, len(paragraphs)):
+        first = next(k for k, (p, _) in enumerate(script) if p == i)
+        block = next(b for b in blocks if b.a + b.size > first and b.size >= 2)
+        at = block.b + max(0, first - block.a)
+        starts.append(float(words[heard[at][0]]["start"]))
+    assert starts == sorted(starts), f"paragraphs out of order: {starts}"
+    ends = [*starts[1:], total]
+    return [{"start": round(s, 3), "seconds": round(e - s, 3), "text": paragraph}
+            for s, e, paragraph in zip(starts, ends, paragraphs)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--voice", default=VOICE)
     parser.add_argument("--model", default=MODEL)
-    parser.add_argument("--style", default=STYLE, help="direction placed before each paragraph; not spoken")
+    parser.add_argument("--seed", type=int, default=SEED)
     parser.add_argument("--voices", action="store_true")
+    parser.add_argument("--retime", action="store_true", help="reuse the take already saved next to --out")
     parser.add_argument("--out", default=str(ROOT / "var" / "video" / "narration.mp3"))
     args = parser.parse_args()
 
@@ -67,37 +105,32 @@ def main() -> int:
         return 2
 
     paragraphs = narration_paragraphs()
-    print(f"{sum(map(len, paragraphs))} characters, {len(paragraphs)} paragraphs, voice {args.voice}, model {args.model}")
+    text = "\n\n".join(paragraphs)
+    print(f"{len(text)} characters, {len(paragraphs)} paragraphs, voice {args.voice}, model {args.model}")
+    if len(text) > MAX_CHARS:
+        print(f"The script is over the {MAX_CHARS}-character limit for one take.")
+        return 2
+
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        work = Path(tmp)
-        silence = work / "pause.wav"
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
-                        "-t", str(PAUSE_SECONDS), str(silence)], check=True)
-        parts, timings, clock = [], [], 0.0
-        for i, paragraph in enumerate(paragraphs):
-            text = f"{args.style} {paragraph}".strip()
-            response = httpx.post(SPEECH_URL, headers={"Authorization": f"Bearer {key}"}, timeout=300,
-                                  json={"model": args.model, "input": text, "voice": args.voice, "response_format": "mp3"})
-            if response.status_code != 200:
-                print(f"OpenRouter error {response.status_code}: {response.text[:400]}")
-                return 1
-            mp3 = work / f"{i:02d}.mp3"
-            mp3.write_bytes(response.content)
-            wav = work / f"{i:02d}.wav"
-            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mp3), "-ar", "44100", "-ac", "1", str(wav)], check=True)
-            seconds = duration(wav)
-            timings.append({"start": round(clock, 3), "seconds": round(seconds, 3), "text": paragraph})
-            print(f"  {clock:7.2f}  {seconds:6.2f}s  {paragraph[:50]}", flush=True)
-            clock += seconds + PAUSE_SECONDS
-            parts += [wav, silence]
-        listing = work / "list.txt"
-        listing.write_text("".join(f"file '{p}'\n" for p in parts[:-1]))
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing),
-                        "-c:a", "libmp3lame", "-b:a", "160k", str(out)], check=True)
+    take = out.with_suffix(".take.mp3")
+    if not args.retime:
+        response = httpx.post(SPEECH_URL, headers={"Authorization": f"Bearer {key}"}, timeout=600, json={
+            "model": args.model, "input": text, "voice": args.voice, "response_format": "mp3",
+            "provider": {"options": {"elevenlabs": {"seed": args.seed}}},
+        })
+        if response.status_code != 200:
+            print(f"OpenRouter error {response.status_code}: {response.text[:400]}")
+            return 1
+        take.write_bytes(response.content)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(take), "-af", f"atempo={TEMPO}",
+                    "-c:a", "libmp3lame", "-b:a", "160k", str(out)], check=True)
+
+    rows = timings(paragraphs, transcribe_words(out, key), duration(out))
+    for row in rows:
+        print(f"  {row['start']:7.2f}  {row['seconds']:6.2f}s  {row['text'][:50]}")
     out.with_suffix(".json").write_text(json.dumps(
-        {"voice": args.voice, "model": args.model, "style": args.style, "pause": PAUSE_SECONDS, "paragraphs": timings},
+        {"voice": args.voice, "model": args.model, "seed": args.seed, "tempo": TEMPO, "pause": TAIL_SECONDS, "paragraphs": rows},
         indent=1, ensure_ascii=False))
     print(f"wrote {out} ({duration(out):.2f}s)")
     return 0
