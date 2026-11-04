@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui %}
+{% set role = 'family' %}{% set active = 'family' %}
+{% block title %}Bills{% endblock %}
+{% block content %}
+<div class="stack">
+  <div class="grid side">
+    <section class="card">
+      <h2>Upload a bill</h2>
+      <p class="muted">Take a photo of the bill, school statement or receipt. Padala reads it and pays it if it fits the plan.</p>
+      <form method="post" action="/family/bills" enctype="multipart/form-data" class="busy-on-submit">
+        <div class="field"><label>Your name</label><input type="text" name="submitted_by" value="Mama Rosario" maxlength="40"></div>
+        <div class="field"><label>Photo of the bill</label><input type="file" name="file" accept="image/*" capture="environment" required></div>
+        <button class="btn block" type="submit">Send bill <span class="spinner"></span></button>
+      </form>
+      <h3>Or try a sample bill</h3>
+      <div class="samples">
+        {% for s in samples %}
+        <form method="post" action="/family/samples/{{ s.key }}" class="busy-on-submit">
+          <input type="hidden" name="submitted_by" value="{{ 'Cousin Jun' if 'hospital' in s.key else 'Mama Rosario' }}">
+          <button type="submit" title="{{ s.label }}"><img src="/samples/{{ s.file }}" alt="{{ s.label }}"><span>{{ s.label }}</span></button>
+        </form>
+        {% endfor %}
+      </div>
+    </section>
+    <aside class="card">
+      <h2>What's left this month</h2>
+      {{ ui.budget(summary) }}
+    </aside>
+  </div>
+
+  <section class="card">
+    <h2>Bills you've sent</h2>
+    {% if bills %}
+    <ul class="bill-list">
+      {% for b in bills %}
+      <li>
+        <a href="/family/bills/{{ b.id }}"><img class="thumb" src="/bills/{{ b.id }}/image" alt=""></a>
+        <div class="grow"><a href="/family/bills/{{ b.id }}"><b>{{ b.extraction.biller_name if b.extraction else b.filename }}</b></a><br>
+          <small class="muted">{{ b.submitted_by }} · {{ b.created_at|when }}</small></div>
+        <div style="text-align:right"><div class="amount">{{ ui.bill_amount(b) }}</div>{{ ui.status(b.status) }}</div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted">No bills yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll("form.busy-on-submit").forEach((f) => f.addEventListener("submit", () => {
+  const b = f.querySelector("button"); b.classList.add("busy"); b.disabled = true;
+  document.querySelectorAll(".samples button").forEach((x) => (x.disabled = true));
+}));
+</script>
+{% endblock %}

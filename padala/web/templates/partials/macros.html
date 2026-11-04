@@ -1,0 +1,51 @@
+{% macro status(s) -%}
+  {% set label, cls = STATUS_LABELS.get(s, (s, 'muted')) %}<span class="badge {{ cls }}">{{ label }}</span>
+{%- endmacro %}
+
+{% macro budget(summary) -%}
+  {% if summary %}
+  <div class="budget-row">
+    <div class="spread"><b>This month ({{ summary.month }})</b><span>{{ summary.left|peso }} left of {{ summary.budget|peso }}</span></div>
+    <div class="meter {{ 'high' if summary.pct > 80 }}"><span style="width: {{ summary.pct }}%"></span></div>
+  </div>
+  {% for c in summary.categories %}
+  <div class="budget-row">
+    <div class="spread"><span><span class="tag">{{ c.category }}</span> <small>{{ c.label }}</small></span><span>{{ c.left|peso }} left of {{ c.max|peso }}</span></div>
+    <div class="meter {{ 'high' if c.pct > 80 }}"><span style="width: {{ c.pct }}%"></span></div>
+  </div>
+  {% endfor %}
+  <p class="muted"><small>Bills above {{ summary.step_up_over|peso }} wait for the OFW's signature. Plan valid until {{ summary.exp|when }}.</small></p>
+  {% else %}
+  <p class="muted">No signed plan yet.</p>
+  {% endif %}
+{%- endmacro %}
+
+{% macro checks(c) -%}
+  {% if c %}
+  <ul class="checks">
+    {% for item in c.checks %}<li class="{{ item.result }}"><b>{{ item.name|replace('_', ' ') }}</b>: {{ item.detail }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+{%- endmacro %}
+
+{% macro trace(steps) -%}
+  <ol class="trace">
+    {% for s in steps %}
+    <li class="{{ s.result }}">
+      <div class="step-label">{{ s.label }}</div>
+      <div class="step-detail">{% if s.code %}<code>{{ s.code }}</code> · {% endif %}{{ s.detail }}</div>
+    </li>
+    {% endfor %}
+  </ol>
+{%- endmacro %}
+
+{% macro source(bill) -%}
+  {% if bill.extraction_source %}
+    {% if bill.extraction_source.startswith('Offline') %}<span class="label-fixture">{{ bill.extraction_source }}</span>
+    {% else %}<span class="label-ai">{{ bill.extraction_source }}</span>{% endif %}
+  {% endif %}
+{%- endmacro %}
+
+{% macro bill_amount(b) -%}
+  {% if b.closed_content %}{{ b.closed_content.payment_amount.amount|peso }}{% elif b.extraction %}₱{{ '{:,.2f}'.format(b.extraction.amount_due) }}{% else %}—{% endif %}
+{%- endmacro %}

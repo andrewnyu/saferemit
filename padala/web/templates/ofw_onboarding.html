@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% set role = 'ofw' %}{% set active = 'onboarding' %}
+{% block title %}Setup{% endblock %}
+{% block content %}
+<div class="stack">
+  <h1>Set up Padala</h1>
+  <p class="muted">Two one-time steps on the phone or laptop you'll approve payments from.</p>
+
+  {% if vault_flash == 'ok' %}<div class="callout ok">PayPal wallet linked. Padala can now charge it, but only for payments your signed plan allows.</div>
+  {% elif vault_flash == 'cancelled' %}<div class="callout warn">PayPal approval was cancelled.</div>
+  {% elif vault_flash and vault_flash.startswith('error') %}<div class="callout bad">PayPal said: {{ vault_flash[6:] }}</div>{% endif %}
+
+  <ol class="steps card">
+    <li id="step-key" class="{{ 'done' if device }}">
+      <h2>Create this device's signing key</h2>
+      <p>Your browser generates an ECDSA P-256 key with WebCrypto and keeps it in IndexedDB as
+        <b>non-extractable</b>: it can sign, but nobody (not even Padala's own code) can copy the private key out.
+        Only the public key is sent to Padala.</p>
+      <div id="key-status" class="callout info">Checking this browser…</div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="create-key" hidden>Create device key</button>
+      </div>
+    </li>
+    <li class="{{ 'done' if vault }}">
+      <h2>Link your PayPal wallet</h2>
+      <p>One approval saves your PayPal wallet with PayPal (Payment Method Tokens v3, merchant-initiated). Padala then
+        charges it in USD for each verified bill. You approve once; the plan you sign decides what may be charged.</p>
+      {% if vault %}
+        <div class="callout ok">Linked: <code>{{ vault.vault_id }}</code>{% if vault.payer_email %} · {{ vault.payer_email }}{% endif %} ({{ vault.mode }})</div>
+      {% else %}
+        <form method="post" action="/ofw/vault/start"><button class="btn" type="submit">Link PayPal wallet</button></form>
+        {% if paypal_mode == 'mock' %}<p class="muted"><small>Mock mode: the approval page is simulated locally.</small></p>{% endif %}
+      {% endif %}
+    </li>
+    <li>
+      <h2>Sign your plan</h2>
+      <p>Choose who can be paid and how much. <a href="/ofw/plan">Go to the plan →</a></p>
+    </li>
+  </ol>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async () => {
+  const status = document.getElementById("key-status"), btn = document.getElementById("create-key");
+  const show = (stored) => {
+    status.className = "callout ok";
+    status.innerHTML = `This browser holds device key <code>${Padala.esc(stored.kid.slice(0, 16))}…</code>
+      (private key <code>extractable: ${stored.privateKey.extractable}</code>).`;
+    document.getElementById("step-key").classList.add("done");
+  };
+  try {
+    const stored = await Padala.loadDeviceKey();
+    if (stored) { show(await Padala.registerDeviceKey(stored)); return; }
+    status.className = "callout warn";
+    status.textContent = "No device key in this browser yet.";
+    btn.hidden = false;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { show(await Padala.createDeviceKey()); btn.hidden = true; }
+      catch (e) { status.className = "callout bad"; status.textContent = e.message; btn.disabled = false; }
+    };
+  } catch (e) {
+    status.className = "callout bad";
+    status.textContent = "WebCrypto/IndexedDB unavailable: " + e.message;
+  }
+})();
+</script>
+{% endblock %}
