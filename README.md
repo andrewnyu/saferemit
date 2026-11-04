@@ -6,7 +6,7 @@ Built for the PayPal AI Hackathon 2026. The product, flow, demo script and hones
 
 ## What it does
 
-- **The OFW** (for example, working in Dubai) registers a device key, links a PayPal wallet once, and signs a **remittance plan**: who may be paid, a monthly budget, a cap per category, a 30-day expiry, and an amount above which they want to approve each bill themselves.
+- **The OFW** (for example, a nurse in California) registers a device key, links a PayPal wallet once, and signs a **remittance plan**: who may be paid, a monthly budget, a cap per category, a 30-day expiry, and an amount above which they want to approve each bill themselves.
 - **The family** in Bacolod photographs a tuition statement, a power bill or a pharmacy receipt and uploads it from a phone.
 - **The bill agent** reads the bill with Claude vision into a strict schema, then runs deterministic checks: is the payee registered, does the account number match, do the line items add up, how unusual is the amount against this payee's seasonal history, has this bill been seen before. It then drafts and signs a closed payment mandate.
 - **The gateway** checks the whole chain with plain code, no LLM: the OFW's signature, every disclosure digest, the agent's key binding, every constraint, the budget ledger and replay. Only then does it charge the OFW's vaulted PayPal wallet in USD and pay the payee in PHP through Payouts. Whether it pays or refuses, it returns a signed receipt and a step-by-step trace.
@@ -63,7 +63,7 @@ The SD-JWT library (`padala/crypto/sdjwt.py`) also implements the plain RFC 9901
 | `payment.execution_date` | AP2 | `execution_date` falls inside `[not_before, not_after]`. |
 | `padala.category_cap` | custom | A disclosed cap must exist for the payee's category, and spend in its window (a month, or a school term) plus this payment must stay within `max`. |
 | `padala.evidence_required` | custom | `transaction_id` = SHA-256 of the agent-signed bill evidence JWT (the role AP2 gives the checkout JWT). The gateway re-hashes the stored bill image, re-runs `payee_account_match`, `line_items_sum` and `no_duplicate` (perceptual hash) itself, and requires the extracted total to equal the payment amount. |
-| `padala.step_up_over` | custom | Above the threshold the agent's signature is not enough: the bill is queued until the OFW's device key signs that exact closed mandate. |
+| `padala.step_up_over` | custom | Above the threshold, or when the signed bill evidence carries tampering signals or embedded instructions, the agent's signature is not enough: the bill is queued until the OFW's device key signs that exact closed mandate. |
 
 The full schemas and evaluation rules are in the docstring of `padala/mandates/model.py`. Any constraint type the gateway does not know fails closed. AP2's rule that an agent must not present a new open-mandate presentation before getting a receipt for the previous one is enforced through a receipt chain: every closed hop names the latest receipt for its mandate (`padala_prev_receipt`). Receipts follow AP2's Payment Receipt shape (`status`, `iss`, `iat`, `reference`, `payment_id`, plus `psp_confirmation_id` and `network_confirmation_id` on success, or `error` and `error_description`) and are signed by the gateway's own key, which is published at `/.well-known/padala-gateway.json`.
 
@@ -95,7 +95,7 @@ Open http://localhost:8000. Without a `.env` file this runs with `PAYPAL_MODE=mo
 2. **OFW → Plan**: *Review and sign on this device*. The browser re-hashes all nine disclosures, renders the plan from the exact bytes it will sign, and signs them with the non-extractable key.
 3. **Family**: tap the *tuition* and *Negros Power* sample bills. Both are paid automatically. The power bill shows a warning, `+62% vs Oct 2025`, but it is within its cap.
 4. **Family**: upload `samples/hospital-doctored.png` as "Cousin Jun". The AI flags signs of tampering, the line items don't add up, and the gateway stops the payment with `payee_not_allowed`. It goes to **OFW → Approvals**, where the OFW declines it with a signature.
-5. **Family**: tap the *prompt injection* sample. The bill tells the AI to pay a "new account". Even a fooled agent cannot add a payee, because the gateway refuses anything outside `allowed_payees`.
+5. **Family**: tap the *prompt injection* sample. The bill tells the AI to pay a "new account". Claude names the real school and reports the attempt, so the gateway holds the bill until the OFW decides in **Approvals**. If a fooled model named the attacker instead, the gateway would refuse anything outside `allowed_payees`; `redteam.py` tests both.
 6. Optional: tap the *Casa Maria rent* sample (₱16,000, above the ₱15,000 step-up). It waits in Approvals until the OFW signs.
 7. **OFW → Dashboard**: every peso, with the bill photo, the receipt, the USD charge and FX rate, and the full verification trace.
 
@@ -113,7 +113,7 @@ python scripts/redteam.py
 python scripts/seed.py --demo-data
 ```
 
-`redteam.py` plays 11 attacks against fresh worlds: tampered amount, tampered budget, payee not allowed, replay, replay with a fresh nonce, wrong agent key, forged device key, over budget, expired mandate, and two prompt injections. It exits non-zero if any attack gets through. `seed.py --demo-data` fills a database with a finished demo, signed by a labelled software key instead of a browser key. Use the *Reset demo data* button on the home page to start over.
+`redteam.py` plays 12 attacks against fresh worlds: tampered amount, tampered budget, payee not allowed, replay, replay with a fresh nonce, wrong agent key, forged device key, over budget, expired mandate, and three prompt injections. It exits non-zero if any attack gets through. `seed.py --demo-data` fills a database with a finished demo, signed by a labelled software key instead of a browser key. Use the *Reset demo data* button on the home page to start over.
 
 `scripts/e2e_demo.js` drives the whole demo script in headless Chromium with real WebCrypto signing (it needs Node and Playwright; usage is in the file header).
 
@@ -149,13 +149,16 @@ What happens in sandbox mode, mapped to the APIs:
 | Finish vaulting | `POST /v3/vault/payment-tokens` with `payment_source.token {id: <setup token>, type: SETUP_TOKEN}`, which returns the vault id |
 | Charge (buyer not present) | `POST /v2/checkout/orders`, `intent: CAPTURE`, USD amount, `payment_source.paypal.vault_id` and `stored_credential {payment_initiator: MERCHANT, usage: SUBSEQUENT}`. If the order is not `COMPLETED` on create, Padala calls `/capture`. |
 | Pay the payee | `POST /v1/payments/payouts`, one `EMAIL` item in `PHP` |
-| Undo on payout failure | `POST /v2/payments/captures/{id}/refund` |
+| Confirm delivery | `GET /v1/payments/payouts/{id}`. A bill shows *Payout processing* until the item reports `SUCCESS`. |
+| Undo on payout failure | `POST /v2/payments/captures/{id}/refund`, whether the payout is refused at once or fails later. A later failure also returns the budget. |
 
-Every POST sends a `PayPal-Request-Id` derived from the payment's `transaction_id`, so a retried settlement cannot charge twice. FX comes from frankfurter.app (ECB rates), cached for 6 hours, with the last cached rate or `PADALA_FX_FALLBACK_RATE` as the fallback. The rate and its source are recorded on every payment. The request shapes follow PayPal's published OpenAPI specs ([paypal-rest-api-specifications](https://github.com/paypal/paypal-rest-api-specifications)) and are covered by tests with a fake transport. They have **not yet been run against the live sandbox**.
+Every POST sends a `PayPal-Request-Id` derived from the payment's `transaction_id`, so a retried settlement cannot charge twice. FX comes from frankfurter.app (ECB rates), cached for 6 hours, with the last cached rate or `PADALA_FX_FALLBACK_RATE` as the fallback. The rate and its source are recorded on every payment. The request shapes follow PayPal's published OpenAPI specs ([paypal-rest-api-specifications](https://github.com/paypal/paypal-rest-api-specifications)) and are covered by tests with a fake transport. All of these calls have also been run against the live sandbox: the wallet approval, charge, PHP payout, delivery check and refund. A payout that fails after being accepted has only been tested against the mock.
 
 ## Run it with Claude
 
-Set `ANTHROPIC_API_KEY` in `.env` (with `PADALA_INTAKE_MODE=auto` or `claude`). Uploads are then read by `claude-opus-5-5` using structured outputs (`client.beta.messages.parse` with the Pydantic `BillExtraction` schema), at effort `high`, with server-side refusal fallback (`fallbacks: "default"`). The code checks `stop_reason` before reading the output: a `refusal`, a `max_tokens` cut-off or output that doesn't match the schema sends the bill to the OFW for review and never into a payment. The system prompt treats the image as untrusted: text addressed to an AI is copied into `embedded_instructions` and ignored. Offline fixtures exist only for tests and keyless demos, and the UI labels them as such.
+Set `OPENROUTER_API_KEY` in `.env` to read bills with `anthropic/claude-opus-5.5` through OpenRouter, using a strict JSON schema and the same validation. `python scripts/intake_eval.py` runs the sample bills through the real model and compares each reading with the fixtures.
+
+Or set `ANTHROPIC_API_KEY` to call Anthropic directly; it wins if both are set (with `PADALA_INTAKE_MODE=auto` or `claude`). Uploads are then read by `claude-opus-5-5` using structured outputs (`client.beta.messages.parse` with the Pydantic `BillExtraction` schema), at effort `high`, with server-side refusal fallback (`fallbacks: "default"`). The code checks `stop_reason` before reading the output: a `refusal`, a `max_tokens` cut-off or output that doesn't match the schema sends the bill to the OFW for review and never into a payment. The system prompt treats the image as untrusted: text addressed to an AI is copied into `embedded_instructions` and ignored. Offline fixtures exist only for tests and keyless demos, and the UI labels them as such.
 
 ## Project layout
 
@@ -177,13 +180,14 @@ tests/         crypto, intake, PayPal, end-to-end flows, web, red team
 ## Tools used, and how
 
 - **PayPal REST APIs** (sandbox): Payment Method Tokens v3 to vault the OFW's wallet with one approval, Orders v2 to charge it with `vault_id` when the buyer is absent, Payouts to pay PHP to payees, and Refunds to undo a charge whose payout failed.
-- **Claude** (`claude-opus-5-5` through the `anthropic` Python SDK): vision extraction of bill photos into a strict Pydantic schema with structured outputs, refusal handling and server-side fallback. It also reports tampering signals and embedded instructions. It has no tools and no say over payments.
+- **Claude** (Opus 5.5, through OpenRouter or the `anthropic` Python SDK): vision extraction of bill photos into a strict Pydantic schema with structured outputs, refusal handling and server-side fallback. It also reports tampering signals and embedded instructions. It has no tools and no say over payments.
 - **AP2 v0.2**: mandate types, constraint semantics, the delegation chain format, receipts, and the rule that verification is deterministic. Padala adds three custom constraint types, using AP2's extension point.
 - **SD-JWT and JOSE**: implemented from scratch on `cryptography` (ES256 on P-256) so the code is readable end to end.
 - **WebCrypto + IndexedDB**: a non-extractable ECDSA P-256 device key that signs the plan and step-up decisions in the browser.
 - **FastAPI, Jinja2, vanilla JS, SQLite**: the app, with no build step. The ledger uses `BEGIN IMMEDIATE` so concurrent reservations are serialized.
 - **Pillow**: generates the sample bills and computes the 256-bit difference hash used for duplicate detection.
-- **frankfurter.app**: USD→PHP reference rates.
+- **Frankfurter** (api.frankfurter.dev): USD→PHP reference rates.
+- **ElevenLabs** (through OpenRouter): narration for the demo video, from `docs/VIDEO_SCRIPT.md`.
 - **pytest, plus Playwright for the browser check**.
 
 ## Honest limits

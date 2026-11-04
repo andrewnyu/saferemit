@@ -49,7 +49,7 @@
   <section class="card">
     <h2>PayPal settlement <span class="badge {{ 'warn' if payment.paypal_mode == 'mock' else 'ok' }}">{{ payment.paypal_mode }}</span></h2>
     <dl class="kv">
-      <dt>Paid to payee</dt><dd>{{ payment.php_minor|peso }} via Payouts · batch <code>{{ payment.payout_batch_id }}</code> ({{ payment.payout_status }})</dd>
+      <dt>{{ 'Paid to payee' if payment.status == 'paid' else ('Payout failed' if payment.status == 'payout_failed' else 'Sending to payee') }}</dt><dd>{{ payment.php_minor|peso }} via Payouts · batch <code>{{ payment.payout_batch_id }}</code> ({{ payment.payout_status }})</dd>
       <dt>Charged to OFW</dt><dd>USD {{ '%.2f'|format(payment.usd_cents/100) }} from the vaulted wallet · capture <code>{{ payment.capture_id }}</code></dd>
       <dt>FX</dt><dd>{{ payment.fx_rate }} PHP per USD · {{ payment.fx_source }}</dd>
     </dl>
@@ -80,3 +80,4 @@
   {% endif %}
 </div>
 {% endblock %}
+{% block scripts %}{% if bill.status == 'paying' %}<script>setTimeout(() => location.reload(), 4000);</script>{% endif %}{% endblock %}

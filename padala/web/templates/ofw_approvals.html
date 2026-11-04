@@ -5,7 +5,7 @@
 {% block content %}
 <div class="stack">
   <h1>Needs your decision</h1>
-  <p class="muted">Step-ups are bills over your threshold: the gateway will only pay them with your device signature over
+  <p class="muted">Step-ups are bills over your threshold, or bills carrying warnings: the gateway will only pay them with your device signature over
     this exact closed mandate. Escalations are bills the gateway already stopped; you can decline them for the record.</p>
   {% for a in approvals %}{% set b = a.bill %}
   <section class="card" id="approval-{{ a.id }}">

@@ -34,6 +34,8 @@ class Settings:
     fx_offline: bool
     fx_fallback_rate: float
     gateway_audience: str = "padala-gateway"
+    openrouter_api_key: str = ""
+    openrouter_model: str = "anthropic/claude-opus-5.5"
 
     @property
     def db_path(self) -> Path:
@@ -53,7 +55,7 @@ class Settings:
             return True
         if self.intake_mode == "offline":
             return False
-        return bool(self.anthropic_api_key)
+        return bool(self.anthropic_api_key or self.openrouter_api_key)
 
 
 @lru_cache
@@ -78,4 +80,6 @@ def get_settings() -> Settings:
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         fx_offline=os.environ.get("PADALA_FX_OFFLINE", "0") == "1",
         fx_fallback_rate=float(os.environ.get("PADALA_FX_FALLBACK_RATE", "58.50")),
+        openrouter_api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+        openrouter_model=os.environ.get("PADALA_OPENROUTER_MODEL", "anthropic/claude-opus-5.5"),
     )

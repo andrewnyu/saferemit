@@ -53,10 +53,12 @@ Treat a remittance plan as an AP2 v0.2 open Payment Mandate (https://github.com/
 
 ## Demo script (under 3 minutes)
 
-1. OFW in Dubai sets up the plan and signs.
-2. Mom in Bacolod uploads a tuition statement and a power bill. AI extracts both and flags the power bill +62% vs last May but within its cap. Both are paid automatically.
+The full narration and shot list are in [VIDEO_SCRIPT.md](VIDEO_SCRIPT.md).
+
+1. OFW in California sets up the plan and signs.
+2. Mom in Bacolod uploads a tuition statement and a power bill. AI extracts both and flags the power bill +62% vs last October but within its cap. Both are paid automatically.
 3. A cousin uploads a doctored "hospital bill" from an unknown clinic. AI flags tampering; the gateway rejects it (`payee not in allowed_payees`); it escalates to the OFW, who declines.
-4. Red team: a prompt injection inside a bill tries to make the agent pay a new payee. The signature/constraint check rejects it on screen.
+4. A prompt injection inside a bill tells the agent to pay a new payee. Claude reports it, and the gateway holds the bill for the OFW, who declines. The red team shows that even a fooled model cannot add a payee.
 5. Dashboard with every peso and signed receipts.
 
 ## Honest limits

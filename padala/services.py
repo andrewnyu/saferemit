@@ -14,6 +14,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
+import httpx
+
 from padala import keys
 from padala.agent import BillAgent, today_manila
 from padala.config import Settings
@@ -24,10 +26,13 @@ from padala.gateway import Gateway
 from padala.mandates import model as m
 from padala.mandates import open_mandate
 from padala.paypal import make_client
+from padala.paypal.client import PayPalError
 from padala.paypal.fx import FxProvider
 from padala.paypal.settlement import PayPalSettler
 
 SAMPLES = Path(__file__).resolve().parent.parent / "samples"
+PAYOUT_POLL_SECONDS = 3
+PAYOUT_FAILED = {"FAILED", "RETURNED", "BLOCKED", "REVERSED", "REFUNDED", "DENIED", "CANCELED"}
 
 
 class Services:
@@ -43,6 +48,7 @@ class Services:
                                PayPalSettler(self.paypal, self.fx, self.vault_id),
                                audience=settings.gateway_audience, clock=clock)
         self.agent = BillAgent(self)
+        self._payout_checked: dict[int, float] = {}
 
     @property
     def agent_jwk(self) -> dict:
@@ -118,7 +124,7 @@ class Services:
                   m.CategoryCap("housing", 18_000_00)],
             step_up_over_minor=15_000_00, not_before=today.isoformat(),
             not_after=(today + timedelta(days=30)).isoformat(), valid_days=30,
-            ofw_name="Ate Liza (Dubai)", household="Santos family, Bacolod")
+            ofw_name="Ate Liza (California)", household="Santos family, Bacolod")
 
     def create_draft(self, plan: m.Plan, kid: str | None = None) -> tuple[int, open_mandate.Draft]:
         """Prepare the open mandate for the browser holding device key `kid` to sign."""
@@ -178,6 +184,46 @@ class Services:
                 "left": max(plan.monthly_budget_minor - spent, 0),
                 "pct": min(100, round(100 * spent / plan.monthly_budget_minor)), "categories": categories,
                 "exp": plan_row["exp"], "step_up_over": plan.step_up_over_minor}
+
+    # ------------------------------------------------------------------ payouts after the charge
+
+    def reconcile_payouts(self, bill_id: int | None = None) -> None:
+        """PayPal accepts a payout as PENDING and delivers it later, so a bill only
+        becomes `paid` once the payout item reports SUCCESS. A payout that ends badly
+        refunds the OFW and returns the budget. With no bill_id this runs on page
+        views, at most once per PAYOUT_POLL_SECONDS for each payment."""
+        query = ("SELECT p.id, p.bill_id, p.capture_id, p.payout_batch_id, b.transaction_id FROM payments p "
+                 "JOIN bills b ON b.id = p.bill_id WHERE p.status = 'paying'")
+        rows = self.db.all(query + " AND p.bill_id = ?", bill_id) if bill_id else self.db.all(query)
+        for row in rows:
+            if bill_id is None and self.clock() - self._payout_checked.get(row["id"], 0) < PAYOUT_POLL_SECONDS:
+                continue
+            self._payout_checked[row["id"]] = self.clock()
+            try:
+                state = self.paypal.get_payout(row["payout_batch_id"])
+            except (PayPalError, httpx.HTTPError):
+                continue  # still processing as far as we know; the next view tries again
+            status = state.get("item_status") or state.get("batch_status")
+            self.db.run("UPDATE payments SET payout_status = ? WHERE id = ?", status, row["id"])
+            if status == "SUCCESS":
+                outcome, bill_status = "paid", "paid"
+            elif status in PAYOUT_FAILED:
+                outcome, bill_status = "payout_failed", "failed"
+            else:
+                continue  # PENDING, PROCESSING, UNCLAIMED, ONHOLD: not finished
+            with self.db.connect() as conn:  # only one request gets to act on this result
+                won = conn.execute("UPDATE payments SET status = ? WHERE id = ? AND status = 'paying'",
+                                   (outcome, row["id"])).rowcount == 1
+            if not won:
+                continue
+            detail = None
+            if outcome == "payout_failed":
+                note = self.gateway.reverse_failed_payout(row["transaction_id"], row["capture_id"])
+                reason = f": {state['error']}" if state.get("error") else ""
+                detail = f"PayPal could not deliver the payout ({status}{reason}); {note}"
+                self.db.run("UPDATE payments SET error = ? WHERE id = ?", detail, row["id"])
+            self.db.run("UPDATE bills SET status = ?, status_detail = ?, updated_at = ? WHERE id = ?",
+                        bill_status, detail, now(), row["bill_id"])
 
     def reset_demo(self) -> None:
         """Wipe demo state (bills, plans, ledger, keys registered by browsers) and reseed."""

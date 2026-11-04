@@ -1,6 +1,8 @@
 import json
+import time
 
-from padala.simulation import submit_sample
+from padala.paypal.mock import MockPayPal
+from padala.simulation import build_world, fooled_reading_of_injection, sign_plan, submit_sample
 
 
 def bill(services, bill_id):
@@ -42,13 +44,64 @@ def test_doctored_hospital_bill_rejected_and_escalated(planned):
     assert bill(services, bid)["status"] == "declined"
 
 
-def test_prompt_injection_cannot_add_payee(planned):
+def test_fooled_model_cannot_add_payee(planned, monkeypatch):
     services, _ = planned
+    monkeypatch.setattr("padala.agent.extract_offline", lambda _sha: fooled_reading_of_injection())
     b = bill(services, submit_sample(services, "prompt-injection"))
     assert b["status"] == "rejected"
     assert services.receipt(b["receipt_id"])["payload"]["error"] == "payee_not_allowed"
-    checks = json.loads(b["checks"])["checks"]
-    assert any(c["name"] == "prompt_injection" for c in checks)
+
+
+def test_flagged_bill_for_a_real_payee_waits_for_the_ofw(planned):
+    """Claude's real reading of the injection bill: the school's name, plus warnings."""
+    services, device = planned
+    bid = submit_sample(services, "prompt-injection")
+    b = bill(services, bid)
+    assert b["status"] == "awaiting_ofw" and "warnings" in b["status_detail"]
+    assert any(c["name"] == "prompt_injection" for c in json.loads(b["checks"])["checks"])
+    assert not [c for c in services.paypal.calls if c[0] == "charge"]
+    approval = services.db.one("SELECT * FROM approvals WHERE bill_id = ? AND kind = 'step_up'", bid)
+    result = services.agent.approve_step_up(
+        approval["id"], device.decide(json.loads(approval["payload"]), "decline", bill_id=bid))
+    assert result.error == "declined_by_ofw" and bill(services, bid)["status"] == "declined"
+    assert not [c for c in services.paypal.calls if c[0] == "charge"]
+
+
+def test_flagged_bill_pays_only_with_the_ofw_signature(planned):
+    services, device = planned
+    bid = submit_sample(services, "prompt-injection")
+    approval = services.db.one("SELECT * FROM approvals WHERE bill_id = ? AND kind = 'step_up'", bid)
+    result = services.agent.approve_step_up(
+        approval["id"], device.decide(json.loads(approval["payload"]), "approve", bill_id=bid))
+    assert result.paid, result.trace
+    assert bill(services, bid)["status"] == "paid"
+
+
+def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, monkeypatch):
+    monkeypatch.setattr(time, "time", clock)
+    services, device = build_world(tmp_path, clock=clock, paypal=MockPayPal(hold_payouts=True))
+    sign_plan(services, device)
+    bid = submit_sample(services, "negros-power")
+    assert bill(services, bid)["status"] == "paying"
+    services.paypal.hold_payouts = False
+    clock.state["t"] += 10
+    services.reconcile_payouts()
+    assert bill(services, bid)["status"] == "paid"
+    assert services.db.one("SELECT payout_status FROM payments WHERE bill_id = ?", bid)["payout_status"] == "SUCCESS"
+
+
+def test_returned_payout_refunds_and_gives_the_budget_back(tmp_path, clock, monkeypatch):
+    monkeypatch.setattr(time, "time", clock)
+    paypal = MockPayPal(return_payouts_to={"negros-power@business.example.com"})
+    services, device = build_world(tmp_path, clock=clock, paypal=paypal)
+    sign_plan(services, device)
+    bid = submit_sample(services, "negros-power")
+    b = bill(services, bid)
+    assert b["status"] == "failed" and "RETURNED" in b["status_detail"] and "capture refunded" in b["status_detail"]
+    assert [c for c in paypal.calls if c[0] == "refund"]
+    assert services.budget_summary()["spent"] == 0
+    services.reconcile_payouts(bid)  # a second look must not refund twice
+    assert len([c for c in paypal.calls if c[0] == "refund"]) == 1
 
 
 def test_step_up_rent_needs_ofw_signature(planned):

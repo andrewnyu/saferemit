@@ -35,10 +35,11 @@ its selectively-disclosable fields, and an evaluation algorithm):
 
 `padala.step_up_over`
     {"type": "padala.step_up_over", "amount": int minor, "currency": "PHP"}
-    Evaluation: if `payment_amount.amount` > `amount`, the agent's signature is
-    not enough. The gateway answers `step_up_required` and the payment proceeds
-    only with an OFW device-key signature over the same closed mandate content
-    (human-present mode).
+    Evaluation: if `payment_amount.amount` > `amount`, or the agent-signed bill
+    evidence lists any `tampering_signals` or `embedded_instructions`, the agent's
+    signature is not enough. The gateway answers `step_up_required` and the payment
+    proceeds only with an OFW device-key signature over the same closed mandate
+    content (human-present mode). Warnings can only add this requirement.
 
 Interpretation of `payment.agent_recurrence` for bill pay: AP2 describes spacing
 between presentations, which fits subscriptions. A household pays several bills

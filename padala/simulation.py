@@ -14,6 +14,8 @@ from padala.config import Settings
 from padala.crypto import jws
 from padala.crypto.jwk import generate_private_key, public_jwk, thumbprint
 from padala.gateway.verifier import STEP_UP_TYP
+from padala.intake.extract import ExtractionResult, load_fixtures
+from padala.intake.schema import BillExtraction
 from padala.mandates import model as m
 from padala.mandates import open_mandate
 from padala.paypal.mock import MockPayPal
@@ -68,3 +70,13 @@ def sample(key: str) -> bytes:
 
 def submit_sample(services: Services, key: str, by: str = "Mama Rosario") -> int:
     return services.agent.submit_bill(sample(key), filename=f"{key}.png", mime="image/png", submitted_by=by)
+
+
+def fooled_reading_of_injection() -> ExtractionResult:
+    """What a compromised model would return for the injection bill: it obeys the
+    text, names the attacker's payee and reports nothing suspicious."""
+    fixture = next(f for f in load_fixtures().values() if f["key"] == "prompt-injection")
+    fooled = {**fixture["extraction"], "biller_name": "BSA Accounting Office (new account)",
+              "tampering_signals": [], "embedded_instructions": []}
+    return ExtractionResult(BillExtraction.model_validate(fooled), "offline-fixture",
+                            "Simulated compromised extraction: no AI call was made")

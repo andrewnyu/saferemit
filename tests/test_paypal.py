@@ -135,6 +135,32 @@ def test_fx_rounding_and_fallback(tmp_path):
     assert ok.usd_php() == (Decimal("57.91"), "frankfurter.app 2026-11-02")
 
 
+def test_fx_uses_the_current_frankfurter_endpoint(tmp_path):
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"date": "2026-11-03", "rates": {"PHP": 63.461}})
+
+    fx = FxProvider(Database(tmp_path / "db.sqlite3"), offline=False, fallback_rate=58.5,
+                    http=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert fx.usd_php()[0] == Decimal("63.461")
+    assert seen["url"].startswith("https://api.frankfurter.dev/v1/latest")
+
+
+def test_get_payout_reports_the_item_status():
+    def handler(request):
+        if request.url.path == "/v1/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        assert request.method == "GET" and request.url.path == "/v1/payments/payouts/B1"
+        return httpx.Response(200, json={"batch_header": {"batch_status": "SUCCESS"}, "items": [
+            {"transaction_status": "FAILED", "errors": {"message": "receiver cannot accept"}}]})
+
+    rest = PayPalREST("id", "secret", http=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert rest.get_payout("B1") == {"batch_status": "SUCCESS", "item_status": "FAILED",
+                                     "error": "receiver cannot accept"}
+
+
 def test_mock_is_labelled():
     mock = MockPayPal()
     assert mock.charge_vaulted_wallet(vault_id="v", usd=Decimal(1), invoice_id="i", description="d", custom_id="c",

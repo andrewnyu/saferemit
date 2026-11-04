@@ -130,6 +130,7 @@ class _Ctx:
     image_sha256: str | None = None
     phash: str | None = None
     step_up_needed: bool = False
+    step_up_reason: str = ""
 
 
 class Gateway:
@@ -336,7 +337,7 @@ class Gateway:
         if ctx.cap is None:  # no category_cap constraint: no per-category limit
             ctx.cap = {"category": ctx.content["payee"].get("category", "other"), "max": NO_LIMIT, "period": "MONTHLY"}
         if ctx.step_up_needed:
-            raise StepUpRequired("amount is over the OFW's step-up threshold: waiting for the OFW's signature")
+            raise StepUpRequired(f"{ctx.step_up_reason}: waiting for the OFW's signature")
 
     # ------------------------------------------------------------------ constraint evaluators
     # Each returns (ok, human-readable detail, error code).
@@ -442,11 +443,16 @@ class Gateway:
     def _step_up(self, c, ctx, p):
         amount = ctx.content["payment_amount"]["amount"]
         threshold = c["amount"]
-        if amount <= threshold:
+        warnings = self._evidence_warnings(p, ctx)
+        if amount <= threshold and not warnings:
             return True, f"{amount / 100:,.2f} <= step-up threshold {threshold / 100:,.2f}: agent signature suffices", None
         if not p.step_up_decision:
             ctx.step_up_needed = True
-            return True, f"{amount / 100:,.2f} > {threshold / 100:,.2f}: needs the OFW's signature", None
+            if amount > threshold:
+                ctx.step_up_reason = "amount is over the OFW's step-up threshold"
+                return True, f"{amount / 100:,.2f} > {threshold / 100:,.2f}: needs the OFW's signature", None
+            ctx.step_up_reason = "this bill carries warnings (possible tampering or instructions aimed at the AI)"
+            return True, f"signed evidence carries {len(warnings)} warning(s): needs the OFW's signature", None
         try:
             decision = jws.verify(p.step_up_decision, ctx.device_pub, expected_typ=STEP_UP_TYP).payload
         except jws.JWSError as exc:
@@ -458,6 +464,27 @@ class Gateway:
         if decision.get("decision") != "approve":
             return False, "the OFW declined this payment", "declined_by_ofw"
         return True, "OFW approved by signing this exact closed mandate with the device key (human present)", None
+
+    @staticmethod
+    def _evidence_warnings(p, ctx) -> list[str]:
+        """Warnings in the agent-signed evidence. They can only add a human, never
+        remove a check. Bad evidence returns none here because _evidence rejects it."""
+        try:
+            payload = jws.verify(p.evidence_jwt, ctx.agent_pub, expected_typ=m.EVIDENCE_TYP).payload
+        except jws.JWSError:
+            return []
+        extraction = payload.get("extraction") or {}
+        return [*(extraction.get("tampering_signals") or []), *(extraction.get("embedded_instructions") or [])]
+
+    # ------------------------------------------------------------------ after settlement
+
+    def reverse_failed_payout(self, transaction_id: str, capture_id: str) -> str:
+        """PayPal took the charge but the payout later failed: refund it and, once
+        the refund succeeds, give the budget back. Returns what happened."""
+        refunded, note = self.settler.refund(transaction_id, capture_id)
+        if refunded:
+            self.ledger.reverse(transaction_id)
+        return note
 
     # ------------------------------------------------------------------ helpers
 

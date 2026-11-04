@@ -2,6 +2,7 @@ import io
 import json
 
 import anthropic
+import httpx
 import httpx2
 import pytest
 from PIL import Image
@@ -93,3 +94,49 @@ def test_checks_flag_doctored_bill():
     results = {c.name: c.result for c in checks}
     assert payee is None and results["payee_registry"] == "fail" and results["line_items_sum"] == "fail"
     assert results["tampering"] == "warn"
+
+
+def _openrouter(reply=None, status=200):
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        seen["auth"] = request.headers.get("authorization")
+        return httpx.Response(status, json=reply if reply is not None else {})
+
+    return seen, httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def _openrouter_reply(content, finish="stop", **message):
+    return {"model": "anthropic/claude-opus-5.5",
+            "choices": [{"finish_reason": finish, "message": {"role": "assistant", "content": content, **message}}]}
+
+
+def test_openrouter_request_and_parse():
+    fixture = next(iter(extract.load_fixtures().values()))["extraction"]
+    seen, http = _openrouter(_openrouter_reply(json.dumps(fixture)))
+    result = extract.extract_with_openrouter(_png(), "sk-test", http=http)
+    assert result.extraction.biller_name == fixture["biller_name"]
+    assert result.source == "claude:anthropic/claude-opus-5.5" and "OpenRouter" in result.label
+    body = seen["body"]
+    assert seen["auth"] == "Bearer sk-test" and body["provider"]["require_parameters"] is True
+    assert "untrusted" in body["messages"][0]["content"]
+    assert body["messages"][1]["content"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    schema = body["response_format"]["json_schema"]
+    assert schema["strict"] is True and schema["schema"]["additionalProperties"] is False
+    assert schema["schema"]["$defs"]["LineItem"]["additionalProperties"] is False
+
+
+@pytest.mark.parametrize("reply, status, error", [
+    ({}, 401, extract.IntakeError),
+    ({}, 402, extract.IntakeError),
+    ({"error": {"message": "upstream down"}}, 200, extract.IntakeError),
+    ({"choices": []}, 200, extract.IntakeError),
+    (_openrouter_reply('{"biller_name": "trunc', finish="length"), 200, extract.IntakeError),
+    (_openrouter_reply('{"biller_name": "no other fields"}'), 200, extract.IntakeError),
+    (_openrouter_reply("", refusal="declined"), 200, extract.IntakeRefused),
+])
+def test_openrouter_bad_replies_go_to_a_human(reply, status, error):
+    _, http = _openrouter(reply, status)
+    with pytest.raises(error):
+        extract.extract_with_openrouter(_png(), "sk-test", http=http)

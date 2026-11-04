@@ -71,10 +71,10 @@ const OUT = process.env.OUT;
   await page.goto(BASE + '/family');
   await shot('04-family');
 
-  // OFW: approvals: approve the rent (step-up), decline the hospital escalation
+  // OFW: approvals: approve the rent (step-up), decline the injection held for review
   await page.goto(BASE + '/ofw/approvals');
   await shot('06-approvals');
-  await page.click('button[data-decision=approve]');
+  await page.click(`section:has-text("Casa Maria") button[data-decision=approve]`);
   await page.waitForURL(/ofw\/bills\/\d+/);
   console.log('rent after step-up ->', (await page.textContent('h1 ~ * .badge, .spread .badge')).trim());
   await page.goto(BASE + '/ofw/approvals');

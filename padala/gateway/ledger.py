@@ -6,6 +6,7 @@ the insert of the reservation. Two presentations racing for the last ₱1,000 of
 budget therefore cannot both succeed.
 
 Entry lifecycle: reserved -> settled (PayPal succeeded) | released (it failed).
+A settled entry is also released if its payout fails later and the charge is refunded.
 """
 
 from __future__ import annotations
@@ -94,6 +95,10 @@ class Ledger:
 
     def release(self, entry_id: int) -> None:
         self.db.run("UPDATE gw_ledger SET status = 'released' WHERE id = ? AND status = 'reserved'", entry_id)
+
+    def reverse(self, transaction_id: str) -> None:
+        self.db.run("UPDATE gw_ledger SET status = 'released' WHERE transaction_id = ? AND status = 'settled'",
+                    transaction_id)
 
     def spent(self, mandate_id: str, period: str) -> int:
         row = self.db.one(f"SELECT COALESCE(SUM(amount_minor), 0) AS s FROM gw_ledger WHERE mandate_id = ? "

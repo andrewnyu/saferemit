@@ -14,7 +14,7 @@ import httpx
 
 from padala.db import Database
 
-FRANKFURTER_URL = "https://api.frankfurter.app/latest"
+FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
 CACHE_KEY = "fx:USD:PHP"
 TTL_SECONDS = 6 * 3600
 

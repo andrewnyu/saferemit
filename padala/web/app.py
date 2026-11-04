@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,7 +28,7 @@ HERE = Path(__file__).resolve().parent
 SAMPLES = HERE.parent.parent / "samples"
 MAX_UPLOAD = 8 * 1024 * 1024
 STATUS_LABELS = {
-    "paid": ("Paid", "ok"), "rejected": ("Stopped by gateway", "bad"), "declined": ("Declined by OFW", "bad"),
+    "paid": ("Paid", "ok"), "paying": ("Payout processing", "warn"), "rejected": ("Stopped by gateway", "bad"), "declined": ("Declined by OFW", "bad"),
     "awaiting_ofw": ("Waiting for OFW", "warn"), "needs_review": ("Needs review", "warn"),
     "waiting_for_plan": ("Waiting for a plan", "warn"), "failed": ("Payment failed", "bad"),
     "extracting": ("Reading bill…", "muted"),
@@ -121,6 +122,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/ofw", response_class=HTMLResponse)
     def ofw_dashboard(request: Request):
+        svc.reconcile_payouts()
         payments = {p["bill_id"]: dict(p) for p in svc.db.all("SELECT * FROM payments")}
         pending = svc.db.one("SELECT COUNT(*) AS n FROM approvals WHERE status = 'pending'")["n"]
         return render(request, "ofw_dashboard.html", bills=bills(), payments=payments, summary=svc.budget_summary(),
@@ -215,6 +217,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/ofw/bills/{bill_id}", response_class=HTMLResponse)
     def ofw_bill(request: Request, bill_id: int):
+        svc.reconcile_payouts()
         b = bill_or_404(bill_id)
         payment = svc.db.one("SELECT * FROM payments WHERE bill_id = ?", bill_id)
         history = svc.db.all("SELECT * FROM gw_receipts WHERE bill_id = ? ORDER BY created_at, rowid", bill_id)
@@ -226,6 +229,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/family", response_class=HTMLResponse)
     def family(request: Request):
+        svc.reconcile_payouts()
         manifest = json.loads((SAMPLES / "manifest.json").read_text())
         return render(request, "family.html", bills=bills(), summary=svc.budget_summary(), samples=manifest,
                       plan=svc.active_plan())
@@ -238,8 +242,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         mime = file.content_type if file.content_type in ("image/png", "image/jpeg", "image/webp") else None
         if mime is None:
             raise HTTPException(400, "bills must be PNG, JPEG or WebP photos")
-        bill_id = svc.agent.submit_bill(data, filename=file.filename or "bill", mime=mime,
-                                        submitted_by=submitted_by.strip()[:40] or "Family")
+        # Reading a bill takes seconds; don't block the event loop while the model works.
+        bill_id = await run_in_threadpool(svc.agent.submit_bill, data, filename=file.filename or "bill", mime=mime,
+                                          submitted_by=submitted_by.strip()[:40] or "Family")
         return RedirectResponse(f"/family/bills/{bill_id}", status_code=303)
 
     @app.post("/family/samples/{key}")
@@ -254,6 +259,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/family/bills/{bill_id}", response_class=HTMLResponse)
     def family_bill(request: Request, bill_id: int):
+        svc.reconcile_payouts()
         return render(request, "family_bill.html", bill=bill_or_404(bill_id), summary=svc.budget_summary())
 
     @app.exception_handler(HTTPException)

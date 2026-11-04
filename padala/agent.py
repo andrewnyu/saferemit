@@ -30,7 +30,7 @@ from padala.evidence import dhash, sha256_hex, to_minor
 from padala.gateway import GatewayResult, Presentation
 from padala.gateway.verifier import STEP_UP_TYP
 from padala.intake.checks import run_checks
-from padala.intake.extract import IntakeError, extract_offline, extract_with_claude
+from padala.intake.extract import IntakeError, extract_bill, extract_offline
 from padala.mandates import closed_mandate as cm
 from padala.mandates import model as m
 
@@ -62,14 +62,14 @@ class BillAgent:
             path.write_bytes(image_bytes)
         self.s.gateway.register_evidence(image_sha, str(path), mime, phash)
 
-        prior = [dict(r) for r in db.all("SELECT id, phash FROM bills WHERE status IN ('paid', 'awaiting_ofw')")]
+        prior = [dict(r) for r in db.all("SELECT id, phash FROM bills WHERE status IN ('paid', 'paying', 'awaiting_ofw')")]
         bill_id = db.run(
             "INSERT INTO bills (submitted_by, filename, mime, image_sha256, phash, status, created_at, updated_at) "
             "VALUES (?,?,?,?,?,?,?,?)", submitted_by, filename, mime, image_sha, phash, "extracting", now(), now())
 
         try:
             if settings.use_claude:
-                result = extract_with_claude(image_bytes, settings.anthropic_api_key or None)
+                result = extract_bill(image_bytes, settings)
             else:
                 result = extract_offline(image_sha)
         except IntakeError as exc:
@@ -162,10 +162,11 @@ class BillAgent:
                    "capture_id, payout_batch_id, payout_status, paypal_mode, status, created_at) "
                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", bill_id, result.receipt_id,
                    content["payment_amount"]["amount"], st.usd_cents, st.fx_rate, st.fx_source, st.order_id,
-                   st.capture_id, st.payout_batch_id, st.payout_status, st.mode, "paid", now())
-            self._set(bill_id, "paid", None)
+                   st.capture_id, st.payout_batch_id, st.payout_status, st.mode, "paying", now())
+            self._set(bill_id, "paying", None)
+            self.s.reconcile_payouts(bill_id)
         elif result.outcome == "step_up_required":
-            self._set(bill_id, "awaiting_ofw", "over the step-up threshold: the OFW must sign")
+            self._set(bill_id, "awaiting_ofw", result.error_description)
             if not from_approval:
                 self._escalate(bill_id, "step_up", result.error_description, payload=content)
         elif result.outcome == "settlement_failed":

@@ -13,8 +13,13 @@
     </div>
     {% if bill.status == 'paid' %}
       <div class="callout ok" style="margin-top:12px">Paid. {{ bill.extraction.biller_name }} received the payment through PayPal.</div>
+    {% elif bill.status == 'paying' %}
+      <div class="callout warn" style="margin-top:12px">Your OFW has been charged and PayPal is delivering the payment to {{ bill.extraction.biller_name }}. This page updates by itself.</div>
     {% elif bill.status == 'awaiting_ofw' %}
-      <div class="callout warn" style="margin-top:12px">This one is above the amount the plan pays on its own. We've asked your OFW to approve it on their phone.</div>
+      <div class="callout warn" style="margin-top:12px">
+        {% if 'warnings' in (bill.status_detail or '') %}Something on this bill looks unusual, so we've asked your OFW to check it before anything is paid.
+        {% else %}This one is above the amount the plan pays on its own. We've asked your OFW to approve it on their phone.{% endif %}
+      </div>
     {% elif bill.status in ('rejected', 'declined') %}
       <div class="callout bad" style="margin-top:12px">Not paid: {{ bill.status_detail }}. Your OFW has been told.</div>
     {% elif bill.status_detail %}
@@ -30,3 +35,4 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}{% if bill.status == 'paying' %}<script>setTimeout(() => location.reload(), 4000);</script>{% endif %}{% endblock %}

@@ -9,6 +9,7 @@ Endpoints used, with request shapes taken from PayPal's published OpenAPI specs
   POST /v2/checkout/orders                 charge the vaulted wallet, buyer not present
   POST /v2/checkout/orders/{id}/capture    only if the order was not completed on create
   POST /v1/payments/payouts                pay the payee in PHP
+  GET  /v1/payments/payouts/{id}           see whether that payout was delivered
   POST /v2/payments/captures/{id}/refund   undo the charge if the payout fails
 
 Every POST carries a `PayPal-Request-Id` so retries are idempotent.
@@ -168,3 +169,14 @@ class PayPalREST:
         result = self._post("/v1/payments/payouts", body, request_id)
         header = result.get("batch_header", {})
         return {"batch_id": header.get("payout_batch_id"), "status": header.get("batch_status")}
+
+    def get_payout(self, batch_id: str) -> dict:
+        """A batch can finish while its item failed, so report the item's status too."""
+        response = self.http.get(f"{self.base_url}/v1/payments/payouts/{batch_id}",
+                                 headers={"Authorization": f"Bearer {self.access_token()}"})
+        self._raise_for(response)
+        body = response.json()
+        item = (body.get("items") or [{}])[0]
+        return {"batch_status": body.get("batch_header", {}).get("batch_status"),
+                "item_status": item.get("transaction_status"),
+                "error": (item.get("errors") or {}).get("message")}

@@ -12,12 +12,15 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import httpx
 from PIL import Image
 from pydantic import ValidationError
 
 from .schema import BillExtraction
 
 MODEL = "claude-opus-5-5"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL = "anthropic/claude-opus-5.5"
 FIXTURES_PATH = Path(__file__).resolve().parents[2] / "samples" / "fixtures.json"
 MAX_EDGE = 1568  # long edge Claude processes without further downscaling
 
@@ -112,6 +115,88 @@ def extract_with_claude(image_bytes: bytes, api_key: str | None = None) -> Extra
     if response.parsed_output is None:
         raise IntakeError("Claude returned no structured output")
     return ExtractionResult(response.parsed_output, f"claude:{response.model}", f"Extracted by Claude ({response.model})")
+
+
+def _strict_schema(node):
+    """Pydantic's JSON schema, tightened for strict structured outputs."""
+    if isinstance(node, list):
+        return [_strict_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+    out = {key: _strict_schema(value) for key, value in node.items()}
+    if out.get("type") == "object":
+        out["additionalProperties"] = False
+    return out
+
+
+def extract_with_openrouter(image_bytes: bytes, api_key: str, *, model: str = OPENROUTER_MODEL,
+                            http: httpx.Client | None = None) -> ExtractionResult:
+    """The same extraction through OpenRouter's OpenAI-compatible endpoint.
+
+    `require_parameters` stops OpenRouter routing to a provider that would ignore
+    the schema. The reply is still validated against BillExtraction, and any bad
+    or missing output sends the bill to a human, never into a payment.
+    """
+    media_type, data = _prepare_image(image_bytes)
+    body = {
+        "model": model,
+        "max_tokens": 4000,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{data}"}},
+                {"type": "text", "text": "Extract this bill."},
+            ]},
+        ],
+        "response_format": {"type": "json_schema", "json_schema": {
+            "name": "bill_extraction", "strict": True,
+            "schema": _strict_schema(BillExtraction.model_json_schema()),
+        }},
+        "provider": {"require_parameters": True},
+    }
+    client = http or httpx.Client(timeout=120)
+    try:
+        response = client.post(OPENROUTER_URL, json=body, headers={
+            "Authorization": f"Bearer {api_key}", "X-Title": "Padala"})
+    except httpx.HTTPError as exc:
+        raise IntakeError("could not reach OpenRouter") from exc
+    if response.status_code == 401:
+        raise IntakeError("OpenRouter API key rejected")
+    if response.status_code == 402:
+        raise IntakeError("OpenRouter is out of credit")
+    if response.status_code == 429:
+        raise IntakeError("OpenRouter is rate limited; try again shortly")
+    if response.status_code >= 400:
+        raise IntakeError(f"OpenRouter error {response.status_code}")
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise IntakeError("OpenRouter returned a reply that is not JSON") from exc
+    if payload.get("error"):  # OpenRouter can report upstream failures with a 200
+        raise IntakeError(f"OpenRouter upstream error: {payload['error'].get('message', 'unknown')}")
+    try:
+        choice = payload["choices"][0]
+        message = choice["message"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise IntakeError("OpenRouter returned no choices") from exc
+    finish = choice.get("finish_reason")
+    if message.get("refusal") or finish == "content_filter":
+        raise IntakeRefused(finish, message.get("refusal"))
+    if finish == "length":
+        raise IntakeError("Claude ran out of output tokens before finishing the extraction")
+    try:
+        extraction = BillExtraction.model_validate_json(message.get("content") or "")
+    except ValidationError as exc:
+        raise IntakeError("Claude's output did not match the bill schema (truncated or refused)") from exc
+    used = payload.get("model", model)
+    return ExtractionResult(extraction, f"claude:{used}", f"Extracted by Claude ({used}, via OpenRouter)")
+
+
+def extract_bill(image_bytes: bytes, settings) -> ExtractionResult:
+    """Use whichever Claude route is configured: Anthropic directly, else OpenRouter."""
+    if settings.openrouter_api_key and not settings.anthropic_api_key:
+        return extract_with_openrouter(image_bytes, settings.openrouter_api_key, model=settings.openrouter_model)
+    return extract_with_claude(image_bytes, settings.anthropic_api_key or None)
 
 
 def load_fixtures(path: Path = FIXTURES_PATH) -> dict:

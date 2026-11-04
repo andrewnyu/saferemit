@@ -19,10 +19,14 @@ def _id(prefix: str, seed: str, length: int = 17) -> str:
 class MockPayPal:
     mode = "mock"
 
-    def __init__(self, base_url: str = "http://localhost:8000", fail_payouts_to: set[str] | None = None):
+    def __init__(self, base_url: str = "http://localhost:8000", fail_payouts_to: set[str] | None = None,
+                 return_payouts_to: set[str] | None = None, hold_payouts: bool = False):
         self.base_url = base_url.rstrip("/")
-        self.fail_payouts_to = fail_payouts_to or set()
+        self.fail_payouts_to = fail_payouts_to or set()  # refused when the payout is created
+        self.return_payouts_to = return_payouts_to or set()  # accepted, then RETURNED
+        self.hold_payouts = hold_payouts  # stay PENDING until cleared
         self.calls: list[tuple[str, dict]] = []
+        self._receivers: dict[str, str] = {}
 
     def create_setup_token(self, *, return_url: str, cancel_url: str, request_id: str) -> dict:
         token = _id("SETUP", request_id)
@@ -52,4 +56,14 @@ class MockPayPal:
         self.calls.append(("payout", {"receiver": receiver_email, "php": str(php)}))
         if receiver_email in self.fail_payouts_to:
             raise PayPalError(422, "RECEIVER_UNREGISTERED", "mock: receiver cannot accept payouts")
-        return {"batch_id": _id("BATCH", sender_batch_id, 13), "status": "PENDING"}
+        batch_id = _id("BATCH", sender_batch_id, 13)
+        self._receivers[batch_id] = receiver_email
+        return {"batch_id": batch_id, "status": "PENDING"}
+
+    def get_payout(self, batch_id: str) -> dict:
+        self.calls.append(("get_payout", {"batch_id": batch_id}))
+        if self.hold_payouts:
+            return {"batch_status": "PENDING", "item_status": "PENDING", "error": None}
+        if self._receivers.get(batch_id) in self.return_payouts_to:
+            return {"batch_status": "SUCCESS", "item_status": "RETURNED", "error": "mock: receiver returned the payment"}
+        return {"batch_status": "SUCCESS", "item_status": "SUCCESS", "error": None}

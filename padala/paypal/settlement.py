@@ -13,6 +13,8 @@ import uuid
 from decimal import ROUND_CEILING, Decimal
 from typing import Callable
 
+import httpx
+
 from padala.gateway.verifier import SettlementRequest, SettlementResult
 
 from .client import PayPalError
@@ -57,13 +59,16 @@ class PayPalSettler:
                 sender_batch_id=f"padala-{req.transaction_id[:24]}", sender_item_id=req.transaction_id[:30],
                 request_id=_request_id("payout", req.transaction_id))
         except PayPalError as exc:
-            try:
-                self.client.refund_capture(capture_id=charge["capture_id"],
-                                           request_id=_request_id("refund", req.transaction_id))
-                note = "capture refunded"
-            except PayPalError as refund_exc:
-                note = f"REFUND FAILED, reconcile manually: {refund_exc}"
+            _, note = self.refund(req.transaction_id, charge["capture_id"])
             return SettlementResult(False, mode, order_id=charge["order_id"], capture_id=charge["capture_id"],
                                     error=f"payout failed: {exc}; {note}", fx_rate=str(rate), fx_source=source)
         result.payout_batch_id, result.payout_status = payout["batch_id"], payout["status"]
         return result
+
+    def refund(self, transaction_id: str, capture_id: str) -> tuple[bool, str]:
+        """Refund a capture. The request id is stable, so a retry cannot refund twice."""
+        try:
+            self.client.refund_capture(capture_id=capture_id, request_id=_request_id("refund", transaction_id))
+            return True, "capture refunded"
+        except (PayPalError, httpx.HTTPError) as exc:
+            return False, f"REFUND FAILED, reconcile manually: {exc}"
