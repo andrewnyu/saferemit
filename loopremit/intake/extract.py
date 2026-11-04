@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,7 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = "anthropic/claude-opus-5.5"
 FIXTURES_PATH = Path(__file__).resolve().parents[2] / "samples" / "fixtures.json"
 MAX_EDGE = 1568  # long edge the model processes without further downscaling
+RETRY_DELAYS = (1, 3)  # seconds to wait before retrying a dropped connection
 
 SYSTEM_PROMPT = """\
 You read photos of household bills from the Philippines for Loop Remit, a service \
@@ -129,6 +131,19 @@ def _strict_schema(node):
     return out
 
 
+def _post_with_retries(client: httpx.Client, **request) -> httpx.Response:
+    """Reading a bill changes nothing, so a dropped connection is safe to retry.
+    A timeout has already waited long enough, so it is not retried."""
+    for delay in RETRY_DELAYS:
+        try:
+            return client.post(OPENROUTER_URL, **request)
+        except httpx.TimeoutException:
+            raise
+        except httpx.TransportError:
+            time.sleep(delay)
+    return client.post(OPENROUTER_URL, **request)
+
+
 def extract_with_openrouter(image_bytes: bytes, api_key: str, *, model: str = OPENROUTER_MODEL,
                             http: httpx.Client | None = None) -> ExtractionResult:
     """The same extraction through OpenRouter's OpenAI-compatible endpoint.
@@ -156,7 +171,7 @@ def extract_with_openrouter(image_bytes: bytes, api_key: str, *, model: str = OP
     }
     client = http or httpx.Client(timeout=120)
     try:
-        response = client.post(OPENROUTER_URL, json=body, headers={
+        response = _post_with_retries(client, json=body, headers={
             "Authorization": f"Bearer {api_key}", "X-Title": "Loop Remit"})
     except httpx.HTTPError as exc:
         raise IntakeError("could not reach OpenRouter") from exc

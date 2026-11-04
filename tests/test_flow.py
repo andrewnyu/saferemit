@@ -1,6 +1,9 @@
 import json
 import time
+from dataclasses import replace
 
+from loopremit.intake.extract import extract_offline
+from loopremit.intake.schema import BillExtraction
 from loopremit.paypal.mock import MockPayPal
 from loopremit.simulation import build_world, fooled_reading_of_injection, sign_plan, submit_sample
 
@@ -8,6 +11,10 @@ from loopremit.simulation import build_world, fooled_reading_of_injection, sign_
 def bill(services, bill_id):
     return dict(services.db.one("SELECT * FROM bills WHERE id = ?", bill_id))
 
+
+def with_line_items(result, items):
+    extraction = BillExtraction.model_validate({**result.extraction.model_dump(), "line_items": items})
+    return replace(result, extraction=extraction)
 
 
 def test_tuition_and_power_paid_automatically(planned):
@@ -76,6 +83,35 @@ def test_flagged_bill_pays_only_with_the_ofw_signature(planned):
         approval["id"], device.decide(json.loads(approval["payload"]), "approve", bill_id=bid))
     assert result.paid, result.trace
     assert bill(services, bid)["status"] == "paid"
+
+
+def test_bill_without_line_items_waits_for_the_ofw(planned, monkeypatch):
+    """Some bills print only a total. That can't be summed, so a person decides."""
+    services, device = planned
+    real = extract_offline
+
+    monkeypatch.setattr("loopremit.agent.extract_offline", lambda sha: with_line_items(real(sha), []))
+    bid = submit_sample(services, "tuition")
+    b = bill(services, bid)
+    assert b["status"] == "awaiting_ofw" and "no line items" in b["status_detail"]
+    results = {c["name"]: c["result"] for c in json.loads(b["checks"])["checks"]}
+    assert results["line_items_sum"] == "warn"
+    assert not [c for c in services.paypal.calls if c[0] == "charge"]
+    approval = services.db.one("SELECT * FROM approvals WHERE bill_id = ? AND kind = 'step_up'", bid)
+    result = services.agent.approve_step_up(
+        approval["id"], device.decide(json.loads(approval["payload"]), "approve", bill_id=bid))
+    assert result.paid, result.trace
+
+
+def test_line_items_that_do_not_add_up_are_still_refused(planned, monkeypatch):
+    services, _ = planned
+    real = extract_offline
+
+    wrong = [{"description": "Tuition", "amount": 1.00}]
+    monkeypatch.setattr("loopremit.agent.extract_offline", lambda sha: with_line_items(real(sha), wrong))
+    b = bill(services, submit_sample(services, "tuition"))
+    assert b["status"] == "rejected"
+    assert services.receipt(b["receipt_id"])["payload"]["error"] == "line_items_mismatch"
 
 
 def test_bill_stays_processing_until_the_payout_is_delivered(tmp_path, clock, monkeypatch):

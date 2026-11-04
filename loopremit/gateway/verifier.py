@@ -35,7 +35,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from loopremit.crypto import jws, sdjwt
 from loopremit.crypto.jwk import load_public_jwk, public_jwk, thumbprint
 from loopremit.db import Database
-from loopremit.evidence import account_matches, dhash, line_items_sum_ok, line_items_total_minor, sha256_hex, to_minor
+from loopremit.evidence import (
+    account_matches, dhash, has_line_items, line_items_sum_ok, line_items_total_minor, sha256_hex, to_minor,
+)
 from loopremit.mandates import model as m
 from loopremit.mandates.closed_mandate import receipt_reference, transaction_id_for
 from loopremit.mandates.open_mandate import mandate_id as compute_mandate_id
@@ -429,7 +431,8 @@ class Gateway:
             if check == "payee_account_match" and not account_matches(extraction, ctx.content["payee"]):
                 problems.append(("account_mismatch",
                                  f"bill account {extraction.get('account_number')!r} does not match the payee's"))
-            elif check == "line_items_sum" and not line_items_sum_ok(extraction):
+            elif check == "line_items_sum" and has_line_items(extraction) and not line_items_sum_ok(extraction):
+                # A bill with no items can't be summed. _evidence_warnings sends it to the OFW instead.
                 problems.append(("line_items_mismatch",
                                  f"line items sum to {line_items_total_minor(extraction) / 100:,.2f}, "
                                  f"bill says {to_minor(extraction.get('amount_due', 0)) / 100:,.2f}"))
@@ -451,7 +454,7 @@ class Gateway:
             if amount > threshold:
                 ctx.step_up_reason = "amount is over the OFW's step-up threshold"
                 return True, f"{amount / 100:,.2f} > {threshold / 100:,.2f}: needs the OFW's signature", None
-            ctx.step_up_reason = "this bill carries warnings (possible tampering or instructions aimed at the AI)"
+            ctx.step_up_reason = "this bill carries warnings (possible tampering, no line items, or instructions aimed at the AI)"
             return True, f"signed evidence carries {len(warnings)} warning(s): needs the OFW's signature", None
         try:
             decision = jws.verify(p.step_up_decision, ctx.device_pub, expected_typ=STEP_UP_TYP).payload
@@ -474,7 +477,11 @@ class Gateway:
         except jws.JWSError:
             return []
         extraction = payload.get("extraction") or {}
-        return [*(extraction.get("tampering_signals") or []), *(extraction.get("embedded_instructions") or [])]
+        warnings = [*(extraction.get("tampering_signals") or []), *(extraction.get("embedded_instructions") or [])]
+        # Decided here, not by the model, so an empty list can't be used to skip the sum check.
+        if not has_line_items(extraction):
+            warnings.append("no line items to check the total against")
+        return warnings
 
     # ------------------------------------------------------------------ after settlement
 

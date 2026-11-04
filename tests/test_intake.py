@@ -140,3 +140,37 @@ def test_openrouter_bad_replies_go_to_a_human(reply, status, error):
     _, http = _openrouter(reply, status)
     with pytest.raises(error):
         extract.extract_with_openrouter(_png(), "sk-test", http=http)
+
+
+def _flaky(failures, monkeypatch, error=httpx.ConnectError):
+    monkeypatch.setattr(extract, "RETRY_DELAYS", (0, 0))
+    fixture = next(iter(extract.load_fixtures().values()))["extraction"]
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) <= failures:
+            raise error("network down")
+        return httpx.Response(200, json=_openrouter_reply(json.dumps(fixture)))
+
+    return calls, httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_openrouter_retries_a_dropped_connection(monkeypatch):
+    calls, http = _flaky(2, monkeypatch)
+    assert extract.extract_with_openrouter(_png(), "sk-test", http=http).extraction.biller_name
+    assert len(calls) == 3
+
+
+def test_openrouter_gives_up_and_goes_to_a_human(monkeypatch):
+    calls, http = _flaky(99, monkeypatch)
+    with pytest.raises(extract.IntakeError, match="could not reach OpenRouter"):
+        extract.extract_with_openrouter(_png(), "sk-test", http=http)
+    assert len(calls) == 3
+
+
+def test_openrouter_does_not_retry_a_timeout(monkeypatch):
+    calls, http = _flaky(99, monkeypatch, error=httpx.ReadTimeout)
+    with pytest.raises(extract.IntakeError, match="could not reach OpenRouter"):
+        extract.extract_with_openrouter(_png(), "sk-test", http=http)
+    assert len(calls) == 1
